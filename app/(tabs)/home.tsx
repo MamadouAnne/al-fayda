@@ -1,0 +1,441 @@
+import { View, FlatList, ScrollView, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image } from 'react-native';
+import { STORIES, POSTS, TRENDING_TOPICS, CURRENT_USER_PROFILE } from '@/constants/MockData';
+import StoryBubble from '@/components/feed/StoryBubble';
+import PostCard from '@/components/feed/PostCard';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
+
+const { width, height } = Dimensions.get('window');
+
+export default function HomeScreen() {
+  const [refreshing, setRefreshing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const floatingAnimation = useRef(new Animated.Value(0)).current;
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    
+    // Floating animation for background elements
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatingAnimation, {
+          toValue: 1,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatingAnimation, {
+          toValue: 0,
+          duration: 4000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 2000);
+  };
+
+  const headerScale = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0.9],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [1, 0.95],
+    extrapolate: 'clamp',
+  });
+
+  const floatingY = floatingAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      {/* Dynamic Floating Background */}
+      <View style={styles.backgroundContainer}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Animated.View 
+          style={[
+            styles.floatingOrb1,
+            { transform: [{ translateY: floatingY }] }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.floatingOrb2,
+            { transform: [{ translateY: floatingAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [10, -5],
+            }) }] }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.floatingOrb3,
+            { transform: [{ translateY: floatingAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-5, 15],
+            }) }] }
+          ]}
+        />
+      </View>
+
+
+      {/* Header with Notifications and Messages */}
+      <Animated.View style={[styles.topHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+        <BlurView intensity={20} tint="dark" style={styles.headerBlur}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.greetingText}>{getGreeting()}</Text>
+              <Text style={styles.headerSubtitle}>Welcome back!</Text>
+            </View>
+            
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => router.push('/notifications')}
+              >
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+                  style={styles.headerButtonGradient}
+                >
+                  <Ionicons name="notifications-outline" size={22} color="white" />
+                  {/* Notification badge */}
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.badgeText}>3</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => router.push('/messages')}
+              >
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+                  style={styles.headerButtonGradient}
+                >
+                  <Ionicons name="mail-outline" size={22} color="white" />
+                  {/* Message badge */}
+                  <View style={styles.messageBadge}>
+                    <Text style={styles.badgeText}>2</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </BlurView>
+      </Animated.View>
+
+      {/* Immersive Story Experience */}
+      <View style={[styles.storySection, { paddingTop: 20 }]}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.storiesContent, { paddingTop: 10 }]}
+          style={styles.storiesScroll}
+        >
+          {/* Add Your Story */}
+          <TouchableOpacity style={styles.addStoryCard}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
+              style={styles.addStoryGradient}
+            >
+              <Ionicons name="add" size={24} color="white" />
+              <Text style={styles.addStoryText}>Your Story</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          {STORIES.slice(0, 6).map(story => (
+            <StoryBubble key={story.id} story={story} />
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Revolutionary Card Stack Feed */}
+      <Animated.FlatList
+        data={POSTS}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item, index }) => <PostCard post={item} index={index} />}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        contentContainerStyle={styles.feedContainer}
+        showsVerticalScrollIndicator={false}
+        style={styles.feedList}
+      />
+
+      {/* Floating Action Hub */}
+      <View style={styles.floatingActionHub}>
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => router.push('/create-post')}
+        >
+          <LinearGradient
+            colors={['#FF6B6B', '#4ECDC4']}
+            style={styles.createButtonGradient}
+          >
+            <Ionicons name="add" size={24} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.discoverButton}
+          onPress={() => router.push('/(tabs)/search')}
+        >
+          <LinearGradient
+            colors={['#667eea', '#764ba2']}
+            style={styles.discoverButtonGradient}
+          >
+            <Ionicons name="compass" size={20} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0a0a0a',
+  },
+  backgroundContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+  },
+  floatingOrb1: {
+    position: 'absolute',
+    top: 60,
+    right: 30,
+    width: 120,
+    height: 120,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 60,
+    opacity: 0.8,
+  },
+  floatingOrb2: {
+    position: 'absolute',
+    top: 200,
+    left: -20,
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 40,
+    opacity: 0.6,
+  },
+  floatingOrb3: {
+    position: 'absolute',
+    bottom: 150,
+    right: 50,
+    width: 100,
+    height: 100,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 50,
+    opacity: 0.7,
+  },
+  topHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    paddingTop: 50,
+    paddingBottom: 15,
+  },
+  headerBlur: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  greetingText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 6,
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  headerButtonGradient: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  messageBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#4ECDC4',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  storySection: {
+    marginTop: 120,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  storiesScroll: {
+    marginHorizontal: -8,
+  },
+  storiesContent: {
+    paddingHorizontal: 8,
+  },
+  addStoryCard: {
+    marginHorizontal: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  addStoryGradient: {
+    width: 80,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  addStoryText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  feedContainer: {
+    paddingBottom: 120,
+  },
+  feedList: {
+    flex: 1,
+    paddingTop: 20,
+  },
+  floatingActionHub: {
+    position: 'absolute',
+    bottom: 100,
+    right: 24,
+    alignItems: 'flex-end',
+    gap: 12,
+    zIndex: 100,
+  },
+  createButton: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  createButtonGradient: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  discoverButton: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  discoverButtonGradient: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
