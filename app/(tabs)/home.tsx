@@ -35,7 +35,7 @@ export default function HomeScreen() {
           id: post.user.id,
           name: post.user.name,
           username: post.user.username,
-          avatar: post.user.avatar_url || `https://i.pravatar.cc/150?u=${post.user.id}`,
+          avatar: post.user.avatar || `https://i.pravatar.cc/150?u=${post.user.id}`,
           verified: post.user.verified || false,
           location: post.location
         },
@@ -276,7 +276,7 @@ export default function HomeScreen() {
                 {/* User Avatar Overlay */}
                 <View style={styles.storyAvatarOverlay}>
                   <Image 
-                    source={{ uri: storyGroup.user?.avatar_url || `https://i.pravatar.cc/150?u=${storyGroup.user?.id}` }} 
+                    source={{ uri: storyGroup.user?.avatar || `https://i.pravatar.cc/150?u=${storyGroup.user?.id}` }} 
                     style={styles.storyUserAvatar} 
                   />
                 </View>

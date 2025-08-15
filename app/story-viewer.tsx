@@ -161,9 +161,12 @@ export default function StoryViewerScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.userInfo}>
+        <TouchableOpacity 
+          style={styles.userInfo}
+          onPress={() => router.push(`/user/${currentStory.user?.id}`)}
+        >
           <Image 
-            source={{ uri: currentStory.user?.avatar_url || `https://i.pravatar.cc/150?u=${currentStory.user?.id}` }} 
+            source={{ uri: currentStory.user?.avatar || `https://i.pravatar.cc/150?u=${currentStory.user?.id}` }} 
             style={styles.userAvatar}
           />
           <View style={styles.userDetails}>
@@ -178,7 +181,7 @@ export default function StoryViewerScreen() {
               })}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
         
         <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
           <Ionicons name="close" size={28} color="white" />

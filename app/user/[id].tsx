@@ -1,10 +1,10 @@
-import { View, Text, FlatList, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// Removed static data imports
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { usersApi, postsApi } from '@/lib/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,16 +13,50 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState('posts');
   const [isFollowing, setIsFollowing] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
 
-  // Find user by ID
-  const user = null // TODO: Load from API;
-  
-  // Get user's posts
-  const userPosts: any[] = []; // TODO: Load user posts from API
+  const loadUserData = useCallback(async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
+      
+      // Load user profile
+      const userData = await usersApi.getUserProfile(id as string);
+      setUser(userData);
+      
+      // Load user posts
+      const posts = await postsApi.getPostsByUser(id as string, 20, 0);
+      const transformedPosts = Array.isArray(posts) ? posts.map(post => ({
+        id: post?.id || '',
+        images: post?.images || [],
+        likes: post?.likes_count || 0,
+        comments: post?.comments_count || 0
+      })) : [];
+      
+      setUserPosts(transformedPosts);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      // Keep user as null to show error state
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
+  }, [loadUserData]);
 
   useEffect(() => {
+    loadUserData();
+    
     // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnimation, {
@@ -45,12 +79,26 @@ export default function UserProfileScreen() {
         ])
       ),
     ]).start();
-  }, []);
+  }, [loadUserData]);
 
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -8],
   });
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!user) {
     return (
@@ -60,7 +108,15 @@ export default function UserProfileScreen() {
           style={StyleSheet.absoluteFillObject}
         />
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>User not found</Text>
+          <Ionicons name="person-outline" size={60} color="white" />
+          <Text style={styles.errorTitle}>User not found</Text>
+          <Text style={styles.errorText}>This user doesn't exist or has been removed.</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -141,7 +197,7 @@ export default function UserProfileScreen() {
                 </View>
                 <Text style={styles.emptyTitle}>No posts yet</Text>
                 <Text style={styles.emptyDescription}>
-                  When {user.name.split(' ')[0]} shares posts, they'll appear here.
+                  When {(user.name || 'User').split(' ')[0]} shares posts, they'll appear here.
                 </Text>
               </BlurView>
             </LinearGradient>
@@ -245,7 +301,7 @@ export default function UserProfileScreen() {
       <Animated.View style={[styles.header, { opacity: fadeAnimation }]}>
         <BlurView intensity={15} tint="dark" style={styles.headerBlur}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonHeader}>
               <BlurView intensity={20} tint="light" style={styles.backButtonBlur}>
                 <Ionicons name="arrow-back" size={24} color="white" />
               </BlurView>
@@ -273,7 +329,7 @@ export default function UserProfileScreen() {
                 colors={['#f093fb', '#f5576c', '#4facfe', '#00f2fe']}
                 style={styles.avatarRing}
               >
-                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                <Image source={{ uri: user.avatar || `https://i.pravatar.cc/150?u=${user.id}` }} style={styles.avatar} />
               </LinearGradient>
               <View style={styles.onlineIndicator} />
               {user.verified && (
@@ -285,12 +341,12 @@ export default function UserProfileScreen() {
             
             <View style={styles.userDetails}>
               <View style={styles.nameRow}>
-                <Text style={styles.userName}>{user.name}</Text>
+                <Text style={styles.userName}>{user.name || 'User'}</Text>
               </View>
-              <Text style={styles.userUsername}>{user.username}</Text>
+              <Text style={styles.userUsername}>{user.username || '@user'}</Text>
               <View style={styles.locationRow}>
                 <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.locationText}>{user.location}</Text>
+                <Text style={styles.locationText}>{user.location || 'Location not set'}</Text>
               </View>
               {user.profession && (
                 <View style={styles.professionRow}>
@@ -347,11 +403,11 @@ export default function UserProfileScreen() {
               <Text style={styles.statLabel}>Posts</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.followers.toLocaleString()}</Text>
+              <Text style={styles.statNumber}>{(user.followers || 0).toLocaleString()}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.following.toLocaleString()}</Text>
+              <Text style={styles.statNumber}>{(user.following || 0).toLocaleString()}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
           </View>
@@ -467,18 +523,58 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     opacity: 0.7,
   },
-  errorContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  errorText: {
+  loadingText: {
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 10,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 6,
+  },
+  errorText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 30,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  backButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  backButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   header: {
     position: 'absolute',
@@ -498,7 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  backButton: {
+  backButtonHeader: {
     borderRadius: 20,
     overflow: 'hidden',
   },

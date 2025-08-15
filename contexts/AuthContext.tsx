@@ -6,7 +6,7 @@ interface Profile {
   id: string;
   name: string;
   username: string;
-  avatar_url?: string;
+  avatar?: string;
   email?: string;
   bio?: string;
   verified: boolean;
@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: currentAuthUser.email || '',
           name: currentAuthUser.user_metadata?.full_name || currentAuthUser.email?.split('@')[0] || 'User',
           username: currentAuthUser.user_metadata?.username || currentAuthUser.email?.split('@')[0] || 'user',
-          avatar_url: currentAuthUser.user_metadata?.avatar_url || undefined,
+          avatar: currentAuthUser.user_metadata?.avatar_url || undefined,
           bio: undefined,
           verified: false,
           location: undefined,
@@ -251,7 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: currentSession.user.email || '',
               name: currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'User',
               username: currentSession.user.user_metadata?.username || currentSession.user.email?.split('@')[0] || 'user',
-              avatar_url: currentSession.user.user_metadata?.avatar_url,
+              avatar: currentSession.user.user_metadata?.avatar_url,
               bio: undefined,
               verified: false,
               location: undefined,
@@ -300,7 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: currentSession.user.email || '',
               name: currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'User',
               username: currentSession.user.user_metadata?.username || currentSession.user.email?.split('@')[0] || 'user',
-              avatar_url: currentSession.user.user_metadata?.avatar_url,
+              avatar: currentSession.user.user_metadata?.avatar_url,
               bio: undefined,
               verified: false,
               location: undefined,

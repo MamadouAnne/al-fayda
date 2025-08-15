@@ -273,6 +273,11 @@ export const usersApi = {
     return data;
   },
 
+  // Alias for getUserProfile to match usage in user profile screen
+  async getUserProfile(userId: string) {
+    return this.getUser(userId);
+  },
+
   // Search users
   async searchUsers(query: string, limit = 10) {
     const { data, error } = await supabase
