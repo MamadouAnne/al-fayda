@@ -352,19 +352,7 @@ export default function HomeScreen() {
             colors={['#FF6B6B', '#4ECDC4']}
             style={styles.createButtonGradient}
           >
-            <Ionicons name="add" size={24} color="white" />
-          </LinearGradient>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.discoverButton}
-          onPress={() => router.push('/(tabs)/search')}
-        >
-          <LinearGradient
-            colors={['#667eea', '#764ba2']}
-            style={styles.discoverButtonGradient}
-          >
-            <Ionicons name="compass" size={20} color="white" />
+            <Ionicons name="add" size={32} color="white" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -680,23 +668,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   createButtonGradient: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  discoverButton: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  discoverButtonGradient: {
-    width: 48,
-    height: 48,
+    width: 64,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },

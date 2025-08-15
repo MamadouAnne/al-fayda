@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, syncUserAvatar } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
 interface Profile {
@@ -272,6 +272,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               updated_at: new Date().toISOString(),
             };
             setProfile(basicProfile);
+
+            // Sync avatar for initial session
+            syncUserAvatar(currentSession.user.id).then(avatarUrl => {
+              if (avatarUrl) {
+                setProfile(prevProfile => prevProfile ? { ...prevProfile, avatar: avatarUrl } : null);
+              }
+            });
           }
         } else {
           console.log('No initial session found');
@@ -321,6 +328,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               updated_at: new Date().toISOString(),
             };
             setProfile(basicProfile);
+
+            // Sync avatar for auth state changes
+            syncUserAvatar(currentSession.user.id).then(avatarUrl => {
+              if (avatarUrl) {
+                setProfile(prevProfile => prevProfile ? { ...prevProfile, avatar: avatarUrl } : null);
+              }
+            });
           }
         } else {
           console.log('Clearing session and user data');

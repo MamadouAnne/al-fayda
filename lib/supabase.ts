@@ -155,47 +155,41 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | nu
 // Utility function to check and sync user avatar from storage
 export const syncUserAvatar = async (userId: string): Promise<string | null> => {
   try {
-    // Check if avatar file exists in storage with common extensions
-    const extensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-    
-    for (const ext of extensions) {
-      const fileName = `avatar_${userId}.${ext}`;
-      
-      // Try to get the file info to see if it exists
-      const { data: files, error } = await supabase.storage
-        .from('avatars')
-        .list('', { search: fileName });
-      
-      if (!error && files && files.length > 0) {
-        // File exists, generate public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
-        
-        console.log('Found avatar file in storage:', fileName, 'Public URL:', publicUrl);
-        
-        // Update user profile with the correct avatar URL
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ 
-            avatar: publicUrl,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-        
-        if (updateError) {
-          console.error('Error updating user avatar in database:', updateError);
-        } else {
-          console.log('Successfully synced avatar for user:', userId);
-        }
-        
-        return publicUrl;
-      }
+    const { data: files, error } = await supabase.storage
+      .from('avatars')
+      .list('', {
+        search: `avatar_${userId}_`,
+        sortBy: { column: 'name', order: 'desc' },
+        limit: 1,
+      });
+
+    if (error) {
+      console.error('Error listing avatar files:', error);
+      return null;
     }
-    
-    console.log('No avatar file found in storage for user:', userId);
+
+    if (files && files.length > 0) {
+      const latestAvatar = files[0];
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(latestAvatar.name);
+
+      // Update user profile
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ avatar: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+        
+      if (updateError) {
+        console.error('Error updating user avatar in database:', updateError);
+      } else {
+        console.log('Successfully synced avatar for user:', userId);
+      }
+
+      return publicUrl;
+    }
+
     return null;
-    
   } catch (error) {
     console.error('Error syncing user avatar:', error);
     return null;
