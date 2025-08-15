@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [posts, setPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+  const [groupedStories, setGroupedStories] = useState<any[]>([]);
   const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -58,11 +59,38 @@ export default function HomeScreen() {
       // Load stories
       const storiesData = await storiesApi.getStories();
       setStories(storiesData);
+      
+      // Group stories by user
+      const grouped = storiesData.reduce((acc: any[], story: any) => {
+        const existingUser = acc.find(group => group.user_id === story.user_id);
+        if (existingUser) {
+          existingUser.stories.push(story);
+          existingUser.story_count = existingUser.stories.length;
+          // Update the most recent story as the cover
+          if (new Date(story.created_at) > new Date(existingUser.created_at)) {
+            existingUser.media_url = story.media_url;
+            existingUser.created_at = story.created_at;
+            existingUser.id = story.id; // Update to the most recent story ID
+          }
+        } else {
+          acc.push({
+            ...story,
+            stories: [story],
+            story_count: 1
+          });
+        }
+        return acc;
+      }, []);
+      
+      // Sort by most recent story
+      grouped.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setGroupedStories(grouped);
     } catch (error) {
       console.error('Error loading posts:', error);
       // Fallback to empty array if API fails
       setPosts([]);
       setStories([]);
+      setGroupedStories([]);
     } finally {
       setLoading(false);
     }
@@ -200,19 +228,22 @@ export default function HomeScreen() {
           </TouchableOpacity>
           
           {/* User Stories */}
-          {stories.map((story, index) => (
+          {groupedStories.map((storyGroup, index) => (
             <TouchableOpacity 
-              key={story.id} 
+              key={storyGroup.user_id} 
               style={styles.storyContainer}
               onPress={() => {
-                // Mark story as viewed
-                setViewedStories(prev => new Set([...prev, story.id]));
+                // Mark all stories from this user as viewed
+                storyGroup.stories.forEach((story: any) => {
+                  setViewedStories(prev => new Set([...prev, story.id]));
+                });
                 
                 router.push({
                   pathname: '/story-viewer',
                   params: { 
-                    storyId: story.id,
-                    userId: story.user_id 
+                    storyId: storyGroup.id,
+                    userId: storyGroup.user_id,
+                    userStories: JSON.stringify(storyGroup.stories.map((s: any) => s.id))
                   }
                 });
               }}
@@ -220,20 +251,23 @@ export default function HomeScreen() {
               <View style={styles.storyCircle}>
                 {/* Gradient Border */}
                 <LinearGradient
-                  colors={viewedStories.has(story.id) 
-                    ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.3)'] // Viewed: subtle gray
-                    : ['#E91E63', '#F06292', '#9C27B0', '#BA68C8'] // Unviewed: elegant pink-purple gradient
+                  colors={storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
+                          storyGroup.stories.every((s: any) => viewedStories.has(s.id))
+                    ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.3)'] // All viewed: subtle gray
+                    : ['#E91E63', '#F06292', '#9C27B0', '#BA68C8'] // Has unviewed: elegant pink-purple gradient
                   }
                   style={[
                     styles.storyGradientBorder,
-                    viewedStories.has(story.id) ? styles.viewedStoryBorder : styles.unviewedStoryBorder
+                    (storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
+                     storyGroup.stories.every((s: any) => viewedStories.has(s.id))) 
+                      ? styles.viewedStoryBorder : styles.unviewedStoryBorder
                   ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
                   <View style={styles.storyImageWrapper}>
                     <Image 
-                      source={{ uri: story.media_url }} 
+                      source={{ uri: storyGroup.media_url }} 
                       style={styles.storyCircularImage} 
                     />
                   </View>
@@ -242,14 +276,21 @@ export default function HomeScreen() {
                 {/* User Avatar Overlay */}
                 <View style={styles.storyAvatarOverlay}>
                   <Image 
-                    source={{ uri: story.user?.avatar_url || `https://i.pravatar.cc/150?u=${story.user?.id}` }} 
+                    source={{ uri: storyGroup.user?.avatar_url || `https://i.pravatar.cc/150?u=${storyGroup.user?.id}` }} 
                     style={styles.storyUserAvatar} 
                   />
                 </View>
+                
+                {/* Multiple Stories Indicator */}
+                {storyGroup.story_count > 1 && (
+                  <View style={styles.multipleStoriesIndicator}>
+                    <Text style={styles.multipleStoriesText}>{storyGroup.story_count}</Text>
+                  </View>
+                )}
               </View>
               
               <Text style={styles.storyUsername} numberOfLines={1}>
-                {story.user?.username || story.user?.name}
+                {storyGroup.user?.username || storyGroup.user?.name}
               </Text>
             </TouchableOpacity>
           ))}
@@ -570,6 +611,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  multipleStoriesIndicator: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  multipleStoriesText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   feedContainer: {
     paddingBottom: 120,

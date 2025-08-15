@@ -1212,7 +1212,7 @@ export default function PostDetailScreen() {
             }}
           >
             {(postImages || []).map((item, index) => 
-              renderImageItem({ item, index })
+              <View key={index}>{renderImageItem({ item, index })}</View>
             )}
           </ScrollView>
           
@@ -1305,7 +1305,7 @@ export default function PostDetailScreen() {
           {postTags.length > 0 ? (
             <View style={styles.tagsContainer}>
               {(postTags || []).map((tag: string, index: number) => (
-                <TouchableOpacity key={index} style={styles.tag}>
+                <TouchableOpacity key={`tag-${index}-${tag}`} style={styles.tag}>
                   <Text style={styles.tagText}>{tag}</Text>
                 </TouchableOpacity>
               ))}
@@ -1376,9 +1376,11 @@ export default function PostDetailScreen() {
                   rows[rows.length - 1].push(item);
                   return rows;
                 }, []).map((row: any[], rowIndex: number) => (
-                  <View key={rowIndex} style={styles.otherPostsRow}>
+                  <View key={`row-${rowIndex}`} style={styles.otherPostsRow}>
                     {row.map((item: any, itemIndex: number) => 
-                      renderOtherPost({ item, index: rowIndex * 2 + itemIndex })
+                      <View key={`post-${item.id}-${itemIndex}`}>
+                        {renderOtherPost({ item, index: rowIndex * 2 + itemIndex })}
+                      </View>
                     )}
                   </View>
                 ))}
