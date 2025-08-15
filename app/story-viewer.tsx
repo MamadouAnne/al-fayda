@@ -130,7 +130,7 @@ export default function StoryViewerScreen() {
         <Image 
           source={{ uri: currentStory.media_url }} 
           style={styles.storyImage}
-          resizeMode="cover"
+          resizeMode="contain"
         />
         <LinearGradient
           colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.4)']}
@@ -231,12 +231,15 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'absolute',
-    width: '100%',
-    height: '100%',
+    width: width,
+    height: height,
+    top: 0,
+    left: 0,
   },
   storyImage: {
-    width: '100%',
-    height: '100%',
+    width: width,
+    height: height,
+    backgroundColor: 'black',
   },
   progressContainer: {
     flexDirection: 'row',
