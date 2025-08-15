@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, FlatList } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, FlatList, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { BlurView } from 'expo-blur';
 import { postsApi } from '@/lib/api';
 import { Post, Comment, User } from '@/lib/supabase';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // Move styles to the top level to avoid hoisting issues
 const styles = StyleSheet.create({
@@ -182,15 +182,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 15,
   },
+  captionContent: {
+    flexDirection: 'column',
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   captionText: {
     color: 'white',
     fontSize: 15,
     lineHeight: 20,
-    marginBottom: 10,
+    marginTop: 8,
   },
   authorName: {
     fontWeight: '600',
     color: 'white',
+    fontSize: 15,
+  },
+  authorUsername: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -503,6 +516,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
+  postContentText: {
+    color: 'white',
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 8,
+  },
   timestamp: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 11,
@@ -617,6 +636,56 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 14,
   },
+  
+  // Comment Input Styles
+  commentInputContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+  commentInputGradient: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  commentInputBlur: {
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  commentInputContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+  commentInputField: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: 'white',
+    fontSize: 16,
+    maxHeight: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  sendButtonGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
 });
 
 export default function PostDetailScreen() {
@@ -648,8 +717,10 @@ export default function PostDetailScreen() {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [comments] = useState<Comment[]>([]);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Initialize animation refs with proper types
   const fadeAnimation = useRef<Animated.Value>(new Animated.Value(0)).current;
@@ -736,6 +807,37 @@ export default function PostDetailScreen() {
         ])
       ),
     ]).start();
+
+    // Keyboard event listeners
+    const keyboardWillShow = (event: any) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    };
+
+    const keyboardWillHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const keyboardDidShow = (event: any) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    };
+
+    const keyboardDidHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      Platform.OS === 'ios' ? keyboardWillShow : keyboardDidShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      Platform.OS === 'ios' ? keyboardWillHide : keyboardDidHide
+    );
+
+    return () => {
+      showSubscription?.remove();
+      hideSubscription?.remove();
+    };
   }, []);
 
   const floatingY = floatingAnimation.interpolate({
@@ -894,8 +996,19 @@ export default function PostDetailScreen() {
   };
 
   const handleComment = () => {
-    setShowComments(!showComments);
+    setShowCommentInput(true);
   };
+
+  const handleSendComment = () => {
+    if (commentText.trim()) {
+      // TODO: Implement actual comment sending logic
+      console.log('Sending comment:', commentText);
+      setCommentText('');
+      setShowCommentInput(false);
+      Keyboard.dismiss();
+    }
+  };
+
 
   const handleOtherPostPress = (postId: string) => {
     if (!postId) {
@@ -979,7 +1092,11 @@ export default function PostDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       {/* Full Page Background Gradient */}
@@ -1158,23 +1275,24 @@ export default function PostDetailScreen() {
 
         {/* Caption */}
         <Animated.View style={[styles.captionSection, { opacity: fadeAnimation }]}>
-            <Text style={styles.captionText}>
-              <TouchableOpacity onPress={handleUserPress}>
-                <Text style={styles.authorName}>{postUser.name}</Text>
-              </TouchableOpacity>{' '}
-              {post?.content}
-            </Text>
-            
-            {/* Tags */}
-            {postTags.length > 0 ? (
-              <View style={styles.tagsContainer}>
-                {(postTags || []).map((tag: string, index: number) => (
-                  <TouchableOpacity key={index} style={styles.tag}>
-                    <Text style={styles.tagText}>{tag}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
+          <View style={styles.captionContent}>
+            <TouchableOpacity onPress={handleUserPress} style={styles.authorRow}>
+              <Text style={styles.authorName}>{postUser.name}</Text>
+              <Text style={styles.authorUsername}>@{postUser.username}</Text>
+            </TouchableOpacity>
+            <Text style={styles.captionText}>{post?.content}</Text>
+          </View>
+          
+          {/* Tags */}
+          {postTags.length > 0 ? (
+            <View style={styles.tagsContainer}>
+              {(postTags || []).map((tag: string, index: number) => (
+                <TouchableOpacity key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Comments Section */}
@@ -1262,6 +1380,56 @@ export default function PostDetailScreen() {
           </Animated.View>
         )}
       </ScrollView>
-    </View>
+
+      {/* Comment Input */}
+      {showCommentInput && (
+        <Animated.View 
+          style={[
+            styles.commentInputContainer,
+            { 
+              bottom: keyboardHeight > 0 ? keyboardHeight - (Platform.OS === 'ios' ? 0 : 20) : 0
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+            style={styles.commentInputGradient}
+          >
+            <BlurView intensity={20} tint="dark" style={styles.commentInputBlur}>
+              <View style={styles.commentInputContent}>
+                <TextInput
+                  style={styles.commentInputField}
+                  placeholder="Add a comment..."
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  multiline
+                  autoFocus
+                  onSubmitEditing={handleSendComment}
+                  returnKeyType="send"
+                />
+                
+                <TouchableOpacity 
+                  style={[styles.sendButton, !commentText.trim() && styles.sendButtonDisabled]}
+                  onPress={handleSendComment}
+                  disabled={!commentText.trim()}
+                >
+                  <LinearGradient
+                    colors={commentText.trim() ? ['#4ECDC4', '#44A08D'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+                    style={styles.sendButtonGradient}
+                  >
+                    <Ionicons 
+                      name="send" 
+                      size={20} 
+                      color={commentText.trim() ? "white" : "rgba(255,255,255,0.5)"} 
+                    />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </BlurView>
+          </LinearGradient>
+        </Animated.View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
