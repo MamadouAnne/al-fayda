@@ -26,33 +26,31 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
-    paddingTop: 50,
+    zIndex: 20,  // Increased zIndex to ensure it stays above other elements
+    paddingTop: 60,
     paddingHorizontal: 15,
-  },
-  headerBlur: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    backgroundColor: 'transparent',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 15,
+    paddingBottom: 20,  
+    paddingTop: 12,  
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  backButtonBlur: {
+  backButtonContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 22,
   },
   
   // Images Section
@@ -102,7 +100,8 @@ const styles = StyleSheet.create({
   
   // User Section
   userSection: {
-    padding: 15,
+    padding: 20,
+    paddingTop: 120,  // Increased to make space for the header
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -110,10 +109,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarRing: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    padding: 2,
+    width: 54,  
+    height: 54,  
+    borderRadius: 27,  
+    padding: 3,  
     backgroundColor: 'transparent',
     borderWidth: 2,
     // Using a gradient border would require a custom component in React Native
@@ -463,10 +462,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
-  shareButtonBlur: {
+  shareButtonContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 22,
   },
   
   // User Info Styles
@@ -1006,25 +1007,23 @@ export default function PostDetailScreen() {
 
       {/* Header */}
       <Animated.View style={[styles.header, { opacity: fadeAnimation }]}>
-        <BlurView intensity={15} tint="dark" style={styles.headerBlur}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <BlurView intensity={20} tint="light" style={styles.backButtonBlur}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-              </BlurView>
-            </TouchableOpacity>
-            
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Post</Text>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <View style={styles.backButtonContent}>
+              <Ionicons name="arrow-back" size={24} color="white" />
             </View>
-            
-            <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-              <BlurView intensity={20} tint="light" style={styles.shareButtonBlur}>
-                <Ionicons name="share-outline" size={24} color="white" />
-              </BlurView>
-            </TouchableOpacity>
+          </TouchableOpacity>
+          
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Post</Text>
           </View>
-        </BlurView>
+          
+          <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+            <View style={styles.shareButtonContent}>
+              <Ionicons name="share-outline" size={24} color="white" />
+            </View>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
