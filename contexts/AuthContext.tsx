@@ -12,6 +12,12 @@ interface Profile {
   verified: boolean;
   location?: string;
   website?: string;
+  profession?: string;
+  phone?: string;
+  interests?: string;
+  education?: string;
+  experience?: string;
+  skills?: string;
   followers_count: number;
   following_count: number;
   posts_count: number;
@@ -29,6 +35,7 @@ interface AuthContextType {
   signUp: (fullName: string, email: string, password: string, username: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -94,6 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         console.log('Immediate profile created:', immediateProfile);
+        
+        // Avatar should already be a full URL in database (no processing needed)
         
         // Cache the profile
         profileCache.current[userId] = immediateProfile;
@@ -411,6 +420,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshProfile = async () => {
+    try {
+      if (!user) return;
+      
+      console.log('Refreshing profile for user:', user.id);
+      
+      // Avatar sync not needed - avatars are stored as full URLs in database
+      
+      // Fetch fresh profile data from database (don't clear cache yet)
+      const { data: profileData, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      console.log('🔍 Raw profile data from database:', profileData);
+      
+      if (error) {
+        console.error('Error refreshing profile:', error);
+        // If database fetch fails, keep the current profile or create basic one
+        if (!profile) {
+          const basicProfile: Profile = {
+            id: user.id,
+            email: user.email || '',
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+            avatar: user.user_metadata?.avatar_url,
+            bio: undefined,
+            verified: false,
+            location: undefined,
+            website: undefined,
+            followers_count: 0,
+            following_count: 0,
+            posts_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          setProfile(basicProfile);
+        }
+        return;
+      }
+      
+      if (profileData) {
+        const refreshedProfile = profileData as Profile;
+        
+        // Avatar should already be a full URL in database (no processing needed)
+        
+        // Only update if the profile data has actually changed
+        const currentProfileString = JSON.stringify(profile);
+        const newProfileString = JSON.stringify(refreshedProfile);
+        
+        if (currentProfileString !== newProfileString) {
+          profileCache.current[user.id] = refreshedProfile;
+          setProfile(refreshedProfile);
+          console.log('Profile refreshed successfully with new data, avatar:', refreshedProfile.avatar);
+        } else {
+          console.log('Profile data unchanged, skipping state update');
+        }
+      }
+    } catch (error) {
+      console.error('Error in refreshProfile:', error);
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -437,6 +510,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signOut,
         refreshSession,
+        refreshProfile,
       }}
     >
       {children}

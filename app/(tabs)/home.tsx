@@ -7,6 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { postsApi, storiesApi, subscriptions } from '@/lib/api';
+import { getAvatarUrl } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,7 +36,7 @@ export default function HomeScreen() {
           id: post.user.id,
           name: post.user.name,
           username: post.user.username,
-          avatar: post.user.avatar || `https://i.pravatar.cc/150?u=${post.user.id}`,
+          avatar: getAvatarUrl(post.user.avatar),
           verified: post.user.verified || false,
           location: post.location
         },
@@ -274,12 +275,25 @@ export default function HomeScreen() {
                 </LinearGradient>
                 
                 {/* User Avatar Overlay */}
-                <View style={styles.storyAvatarOverlay}>
-                  <Image 
-                    source={{ uri: storyGroup.user?.avatar || `https://i.pravatar.cc/150?u=${storyGroup.user?.id}` }} 
-                    style={styles.storyUserAvatar} 
-                  />
-                </View>
+                {(() => {
+                  const avatarUrl = getAvatarUrl(storyGroup.user?.avatar);
+                  return (
+                    <View style={styles.storyAvatarOverlay}>
+                      {avatarUrl ? (
+                        <Image 
+                          source={{ uri: avatarUrl }} 
+                          style={styles.storyUserAvatar} 
+                        />
+                      ) : (
+                        <View style={[styles.storyUserAvatar, styles.storyDefaultAvatar]}>
+                          <Text style={styles.storyInitialsText}>
+                            {(storyGroup.user?.name || storyGroup.user?.username || 'U').slice(0, 1).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
                 
                 {/* Multiple Stories Indicator */}
                 {storyGroup.story_count > 1 && (
@@ -584,6 +598,16 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
+  },
+  storyDefaultAvatar: {
+    backgroundColor: '#667eea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyInitialsText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   storyUsername: {
     color: 'white',

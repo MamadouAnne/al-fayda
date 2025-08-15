@@ -1,17 +1,18 @@
-import { View, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView, RefreshControl, Alert } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsApi } from '@/lib/api';
+// Avatar URLs are stored directly in database - no utility function needed
 
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { profile: currentUser, signOut, session, loading: isLoading } = useAuth();
+  const { profile: currentUser, signOut, session, loading: isLoading, refreshProfile } = useAuth();
   
   const [selectedTab, setSelectedTab] = useState('posts');
   const [userPosts, setUserPosts] = useState<any[]>([]);
@@ -20,6 +21,9 @@ export default function ProfileScreen() {
   
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
+  const lastRefreshTime = useRef<number>(0);
+
+  // Avatar sync not needed - following senecom approach with direct URL usage
 
   const loadUserPosts = useCallback(async () => {
     if (!currentUser) return;
@@ -63,13 +67,95 @@ export default function ProfileScreen() {
     }).start();
   }, [currentUser, loadUserPosts]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const refreshData = async () => {
+        if (!currentUser) return;
+        
+        // Throttle refresh calls - only allow one every 2 seconds
+        const now = Date.now();
+        if (now - lastRefreshTime.current < 2000) {
+          console.log('Skipping refresh - too soon since last refresh');
+          return;
+        }
+        
+        lastRefreshTime.current = now;
+        console.log('Profile screen focused - refreshing data');
+        console.log('🔍 Current user avatar before refresh:', currentUser.avatar);
+        
+        try {
+          await refreshProfile();
+          await loadUserPosts();
+          console.log('🔍 Current user avatar after refresh:', currentUser.avatar);
+        } catch (error) {
+          console.error('Error refreshing data on focus:', error);
+        }
+      };
+      
+      refreshData();
+    }, [currentUser?.id])
+  );
+
+  const handleShareProfile = () => {
+    Alert.alert('Share Profile', 'Profile sharing functionality will be available soon!');
+  };
+
+  const handleSettingsMenu = () => {
+    Alert.alert(
+      'Profile Settings',
+      'Choose an action',
+      [
+        {
+          text: 'Edit Profile',
+          onPress: () => router.push('/edit-profile'),
+        },
+        {
+          text: 'Share Profile',
+          onPress: handleShareProfile,
+        },
+        {
+          text: 'Privacy Settings',
+          onPress: () => {
+            Alert.alert('Coming Soon', 'Privacy settings will be available soon!');
+          },
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: handleSignOut,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
   const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace('/sign-in');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace('/sign-in');
+            } catch (error) {
+              console.error('Error signing out:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const headerOpacity = scrollY.interpolate({
@@ -174,20 +260,33 @@ export default function ProfileScreen() {
         style={StyleSheet.absoluteFillObject}
       />
 
-      {/* Header */}
-      <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
-        <BlurView intensity={10} tint="dark" style={styles.headerBlur}>
+      {/* Fixed Header */}
+      <View style={styles.header}>
+        <BlurView intensity={15} tint="dark" style={styles.headerBlur}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Profile</Text>
-            <TouchableOpacity onPress={handleSignOut} style={styles.headerButton}>
-              <Ionicons name="log-out" size={24} color="white" />
-            </TouchableOpacity>
+            
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Profile</Text>
+            </View>
+            
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                onPress={() => router.push('/edit-profile')} 
+                style={styles.headerActionButton}
+              >
+                <Ionicons name="create-outline" size={22} color="white" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={handleSettingsMenu} style={styles.headerActionButton}>
+                <Ionicons name="ellipsis-vertical" size={22} color="white" />
+              </TouchableOpacity>
+            </View>
           </View>
         </BlurView>
-      </Animated.View>
+      </View>
 
       <Animated.ScrollView 
         style={styles.scrollView}
@@ -208,90 +307,116 @@ export default function ProfileScreen() {
         {/* Profile Section */}
         <Animated.View style={[styles.profileSection, { opacity: fadeAnimation }]}>
           
-          {/* Avatar and User Info Row */}
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarWrapper}>
-              <Image 
-                source={{ 
-                  uri: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUser.id}` 
-                }} 
-                style={styles.avatar} 
-              />
-              {currentUser.verified && (
-                <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark" size={12} color="white" />
-                </View>
-              )}
-            </View>
-
-            <View style={styles.userInfo}>
-              <Text style={styles.displayName}>{currentUser.name}</Text>
-              <Text style={styles.username}>@{currentUser.username}</Text>
+          {/* Profile Card with Gradient Background */}
+          <View style={styles.profileCard}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.06)']}
+              style={styles.profileCardGradient}
+            >
               
-              {currentUser.location && (
-                <View style={styles.locationRow}>
-                  <Ionicons name="location" size={14} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.locationText}>{currentUser.location}</Text>
+              {/* Avatar and User Info Row */}
+              <View style={styles.profileHeader}>
+                <View style={styles.avatarWrapper}>
+                  <LinearGradient
+                    colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+                    style={styles.avatarRing}
+                  >
+                    {currentUser.avatar ? (
+                      <Image 
+                        source={{ uri: currentUser.avatar }} 
+                        style={styles.avatar}
+                        onLoad={() => console.log('✅ Profile avatar loaded:', currentUser.avatar)}
+                        onError={(error) => console.log('❌ Profile avatar error:', error, 'URL:', currentUser.avatar)}
+                      />
+                    ) : (
+                      <View style={[styles.avatar, styles.defaultAvatar]}>
+                        <Text style={styles.initialsText}>
+                          {(currentUser.name || currentUser.username || 'U').slice(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </LinearGradient>
+                  {currentUser.verified && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark" size={12} color="white" />
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.userInfo}>
+                  <Text style={styles.displayName}>{currentUser.name}</Text>
+                  <Text style={styles.username}>@{currentUser.username}</Text>
+                  
+                  {currentUser.location && (
+                    <View style={styles.locationRow}>
+                      <Ionicons name="location" size={14} color="rgba(255,255,255,0.7)" />
+                      <Text style={styles.locationText}>{currentUser.location}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Join Date */}
+                  <View style={styles.joinDateRow}>
+                    <Ionicons name="calendar" size={12} color="rgba(255,255,255,0.5)" />
+                    <Text style={styles.joinDateText}>
+                      Joined {new Date(currentUser.created_at).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        year: 'numeric' 
+                      })}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Bio */}
+              {currentUser.bio && (
+                <View style={styles.bioSection}>
+                  <Text style={styles.bioText}>{currentUser.bio}</Text>
                 </View>
               )}
-            </View>
+
+              {/* Website */}
+              {currentUser.website && (
+                <TouchableOpacity style={styles.websiteSection}>
+                  <View style={styles.websiteIconWrapper}>
+                    <Ionicons name="link" size={14} color="#4ECDC4" />
+                  </View>
+                  <Text style={styles.websiteText}>{currentUser.website}</Text>
+                </TouchableOpacity>
+              )}
+
+            </LinearGradient>
           </View>
 
-          {/* Bio */}
-          {currentUser.bio && (
-            <View style={styles.bioSection}>
-              <Text style={styles.bioText}>{currentUser.bio}</Text>
-            </View>
-          )}
-
-          {/* Website */}
-          {currentUser.website && (
-            <TouchableOpacity style={styles.websiteSection}>
-              <Ionicons name="link" size={16} color="#4ECDC4" />
-              <Text style={styles.websiteText}>{currentUser.website}</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Join Date */}
-          <View style={styles.joinDateSection}>
-            <Ionicons name="calendar" size={16} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.joinDateText}>
-              Joined {new Date(currentUser.created_at).toLocaleDateString('en-US', { 
-                month: 'long', 
-                year: 'numeric' 
-              })}
-            </Text>
+          {/* Stats Card */}
+          <View style={styles.statsCard}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
+              style={styles.statsCardGradient}
+            >
+              
+              <View style={styles.statsRow}>
+                <TouchableOpacity style={styles.statCard}>
+                  <Text style={styles.statNumber}>{currentUser.posts_count || userPosts.length}</Text>
+                  <Text style={styles.statLabel}>Posts</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.statDivider} />
+                
+                <TouchableOpacity style={styles.statCard}>
+                  <Text style={styles.statNumber}>{currentUser.followers_count?.toLocaleString() || '0'}</Text>
+                  <Text style={styles.statLabel}>Followers</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.statDivider} />
+                
+                <TouchableOpacity style={styles.statCard}>
+                  <Text style={styles.statNumber}>{currentUser.following_count?.toLocaleString() || '0'}</Text>
+                  <Text style={styles.statLabel}>Following</Text>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
           </View>
 
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statCard}>
-              <Text style={styles.statNumber}>{currentUser.posts_count || userPosts.length}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.statCard}>
-              <Text style={styles.statNumber}>{currentUser.followers_count?.toLocaleString() || '0'}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.statCard}>
-              <Text style={styles.statNumber}>{currentUser.following_count?.toLocaleString() || '0'}</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.editButton}>
-              <Ionicons name="create" size={18} color="white" />
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.shareButton}>
-              <Ionicons name="share" size={18} color="white" />
-            </TouchableOpacity>
-          </View>
         </Animated.View>
 
         {/* Tabs */}
@@ -384,10 +509,15 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
     paddingTop: 50,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   headerBlur: {
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 16,
   },
   headerContent: {
     flexDirection: 'row',
@@ -395,10 +525,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  headerCenter: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -406,43 +543,96 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerActionButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   scrollView: {
     flex: 1,
   },
   profileSection: {
-    paddingTop: 100,
+    paddingTop: 120,
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  profileCard: {
+    borderRadius: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  profileCardGradient: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-    gap: 15,
+    marginBottom: 16,
+    gap: 16,
   },
   avatarWrapper: {
     position: 'relative',
   },
+  avatarRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.3)',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  defaultAvatar: {
+    backgroundColor: '#667eea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    color: 'white',
+    fontSize: 28,
+    fontWeight: 'bold',
   },
   verifiedBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: 2,
+    right: 2,
     backgroundColor: '#1DA1F2',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   userInfo: {
     flex: 1,
@@ -450,106 +640,119 @@ const styles = StyleSheet.create({
   },
   displayName: {
     color: 'white',
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   username: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: 6,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
+    marginBottom: 4,
   },
   locationText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
     fontWeight: '500',
   },
+  joinDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  joinDateText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   bioSection: {
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
   bioText: {
-    color: 'white',
-    fontSize: 15,
-    lineHeight: 22,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'left',
   },
   websiteSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
     gap: 8,
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(78, 205, 196, 0.3)',
+  },
+  websiteIconWrapper: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   websiteText: {
     color: '#4ECDC4',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  joinDateSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
-    marginBottom: 20,
-  },
-  joinDateText: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  statsCard: {
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  statsCardGradient: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   statCard: {
     alignItems: 'center',
+    flex: 1,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 8,
   },
   statNumber: {
     color: 'white',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 3,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   statLabel: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    gap: 8,
-  },
-  editButtonText: {
-    color: 'white',
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '600',
-  },
-  shareButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   tabSection: {
     paddingHorizontal: 20,

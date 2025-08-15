@@ -11,7 +11,7 @@ interface Post {
     id: number;
     name: string;
     username: string;
-    avatar: string;
+    avatar: string | null;
     verified?: boolean;
     location?: string;
   };
@@ -75,10 +75,18 @@ export default function PostCard({ post, index = 0 }: PostCardProps) {
       <View style={styles.header}>
         <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
           <View style={styles.avatarContainer}>
-            <Image 
-              source={{ uri: post.user.avatar }} 
-              style={styles.avatar}
-            />
+            {post.user.avatar ? (
+              <Image 
+                source={{ uri: post.user.avatar }} 
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.defaultAvatar]}>
+                <Text style={styles.initialsText}>
+                  {(post.user.name || post.user.username || 'U').slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <View style={styles.onlineIndicator} />
           </View>
           <View style={styles.userDetails}>
@@ -270,6 +278,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+  },
+  defaultAvatar: {
+    backgroundColor: '#667eea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   onlineIndicator: {
     position: 'absolute',

@@ -130,3 +130,74 @@ export interface Story {
   expires_at: string;
   created_at: string;
 }
+
+// Utility function to get avatar URL from Supabase storage
+export const getAvatarUrl = (avatarPath: string | null | undefined): string | null => {
+  if (!avatarPath) return null;
+  
+  // If it's already a full URL (like senecom), return as is
+  if (avatarPath.startsWith('http')) {
+    return avatarPath;
+  }
+  
+  // For legacy filename-only entries, generate public URL from storage
+  try {
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(avatarPath);
+    return publicUrl;
+  } catch (error) {
+    console.error('Error generating avatar public URL:', error);
+    return null;
+  }
+};
+
+// Utility function to check and sync user avatar from storage
+export const syncUserAvatar = async (userId: string): Promise<string | null> => {
+  try {
+    // Check if avatar file exists in storage with common extensions
+    const extensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    
+    for (const ext of extensions) {
+      const fileName = `avatar_${userId}.${ext}`;
+      
+      // Try to get the file info to see if it exists
+      const { data: files, error } = await supabase.storage
+        .from('avatars')
+        .list('', { search: fileName });
+      
+      if (!error && files && files.length > 0) {
+        // File exists, generate public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        
+        console.log('Found avatar file in storage:', fileName, 'Public URL:', publicUrl);
+        
+        // Update user profile with the correct avatar URL
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({ 
+            avatar: publicUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+        
+        if (updateError) {
+          console.error('Error updating user avatar in database:', updateError);
+        } else {
+          console.log('Successfully synced avatar for user:', userId);
+        }
+        
+        return publicUrl;
+      }
+    }
+    
+    console.log('No avatar file found in storage for user:', userId);
+    return null;
+    
+  } catch (error) {
+    console.error('Error syncing user avatar:', error);
+    return null;
+  }
+};
