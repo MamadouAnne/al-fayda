@@ -118,3 +118,15 @@ export interface Message {
   type: 'text' | 'image' | 'file';
   created_at: string;
 }
+
+export interface Story {
+  id: string;
+  user_id: string;
+  user?: User;
+  media_url: string;
+  media_type: 'image' | 'video';
+  content?: string;
+  views_count: number;
+  expires_at: string;
+  created_at: string;
+}

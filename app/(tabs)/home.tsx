@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { postsApi, subscriptions } from '@/lib/api';
+import { postsApi, storiesApi, subscriptions } from '@/lib/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,12 +14,13 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [posts, setPosts] = useState<any[]>([]);
+  const [stories, setStories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const router = useRouter();
 
-  // Load posts on component mount
+  // Load posts and stories on component mount
   const loadPosts = useCallback(async () => {
     try {
       setLoading(true);
@@ -52,10 +53,15 @@ export default function HomeScreen() {
       }));
       
       setPosts(transformedPosts);
+      
+      // Load stories
+      const storiesData = await storiesApi.getStories();
+      setStories(storiesData);
     } catch (error) {
       console.error('Error loading posts:', error);
       // Fallback to empty array if API fails
       setPosts([]);
+      setStories([]);
     } finally {
       setLoading(false);
     }
@@ -179,7 +185,10 @@ export default function HomeScreen() {
           style={styles.storiesScroll}
         >
           {/* Add Your Story */}
-          <TouchableOpacity style={styles.addStoryCard}>
+          <TouchableOpacity 
+            style={styles.addStoryCard}
+            onPress={() => router.push('/create-story')}
+          >
             <LinearGradient
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
               style={styles.addStoryGradient}
@@ -189,7 +198,51 @@ export default function HomeScreen() {
             </LinearGradient>
           </TouchableOpacity>
           
-          {/* Stories will be loaded dynamically from API */}
+          {/* User Stories */}
+          {stories.map((story, index) => (
+            <TouchableOpacity 
+              key={story.id} 
+              style={styles.storyContainer}
+              onPress={() => {
+                router.push({
+                  pathname: '/story-viewer',
+                  params: { 
+                    storyId: story.id,
+                    userId: story.user_id 
+                  }
+                });
+              }}
+            >
+              <View style={styles.storyCircle}>
+                {/* Gradient Border */}
+                <LinearGradient
+                  colors={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']}
+                  style={styles.storyGradientBorder}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.storyImageWrapper}>
+                    <Image 
+                      source={{ uri: story.media_url }} 
+                      style={styles.storyCircularImage} 
+                    />
+                  </View>
+                </LinearGradient>
+                
+                {/* User Avatar Overlay */}
+                <View style={styles.storyAvatarOverlay}>
+                  <Image 
+                    source={{ uri: story.user?.avatar_url || `https://i.pravatar.cc/150?u=${story.user?.id}` }} 
+                    style={styles.storyUserAvatar} 
+                  />
+                </View>
+              </View>
+              
+              <Text style={styles.storyUsername} numberOfLines={1}>
+                {story.user?.username || story.user?.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
@@ -423,6 +476,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 6,
+  },
+  storyContainer: {
+    alignItems: 'center',
+    marginHorizontal: 12,
+    width: 75,
+  },
+  storyCircle: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  storyGradientBorder: {
+    width: 75,
+    height: 75,
+    borderRadius: 37.5,
+    padding: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  storyImageWrapper: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  storyCircularImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  storyAvatarOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  storyUserAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  storyUsername: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
   },
   feedContainer: {
     paddingBottom: 120,

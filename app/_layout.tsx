@@ -41,7 +41,7 @@ function RootLayoutNav() {
     if (user) {
       console.log('Layout: User is signed in, checking if redirect needed');
       // User is signed in, redirect to home if they're not already in a protected route
-      if (!inTabsGroup && segments[0] !== 'create-post' && segments[0] !== 'messages' && segments[0] !== 'chat' && segments[0] !== 'notifications' && segments[0] !== 'user' && segments[0] !== 'post' && segments[0] !== 'comments') {
+      if (!inTabsGroup && segments[0] !== 'create-post' && segments[0] !== 'create-story' && segments[0] !== 'story-viewer' && segments[0] !== 'messages' && segments[0] !== 'chat' && segments[0] !== 'notifications' && segments[0] !== 'user' && segments[0] !== 'post' && segments[0] !== 'comments') {
         console.log('Layout: Redirecting to home...');
         router.replace('/(tabs)/home');
       } else {
@@ -50,7 +50,7 @@ function RootLayoutNav() {
     } else {
       console.log('Layout: User not signed in, checking if protection needed');
       // User is not signed in, redirect to welcome/auth if they're trying to access protected routes
-      if (inTabsGroup || segments[0] === 'create-post' || segments[0] === 'messages' || segments[0] === 'chat' || segments[0] === 'notifications' || segments[0] === 'user' || segments[0] === 'post' || segments[0] === 'comments') {
+      if (inTabsGroup || segments[0] === 'create-post' || segments[0] === 'create-story' || segments[0] === 'story-viewer' || segments[0] === 'messages' || segments[0] === 'chat' || segments[0] === 'notifications' || segments[0] === 'user' || segments[0] === 'post' || segments[0] === 'comments') {
         console.log('Layout: Redirecting to welcome screen...');
         router.replace('/');
       }
@@ -63,6 +63,8 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="create-post" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="create-story" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="story-viewer" options={{ presentation: 'fullScreenModal', headerShown: false }} />
         <Stack.Screen name="comments" options={{ presentation: 'card', headerTitle: 'Comments' }} />
         <Stack.Screen name="messages" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />

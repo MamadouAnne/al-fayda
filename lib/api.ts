@@ -1,4 +1,4 @@
-import { supabase, Post, Comment, Like, Follow, Notification, Message, Chat, User } from './supabase';
+import { supabase, Post, Comment, Like, Follow, Notification, Message, Chat, User, Story } from './supabase';
 
 // Posts API
 export const postsApi = {
@@ -524,6 +524,81 @@ export const messagesApi = {
     if (membersError) throw membersError;
 
     return { chatId: newChat.id };
+  },
+};
+
+// Stories API
+export const storiesApi = {
+  // Get all active stories (non-expired)
+  async getStories() {
+    const { data, error } = await supabase
+      .from('stories')
+      .select(`
+        *,
+        user:user_profiles(*)
+      `)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Get stories by user
+  async getStoriesByUser(userId: string) {
+    const { data, error } = await supabase
+      .from('stories')
+      .select(`
+        *,
+        user:user_profiles(*)
+      `)
+      .eq('user_id', userId)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create new story
+  async createStory(mediaUrl: string, mediaType: 'image' | 'video', content?: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('stories')
+      .insert({
+        user_id: user.id,
+        media_url: mediaUrl,
+        media_type: mediaType,
+        content,
+      })
+      .select(`
+        *,
+        user:user_profiles(*)
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Delete story
+  async deleteStory(storyId: string) {
+    const { error } = await supabase
+      .from('stories')
+      .delete()
+      .eq('id', storyId);
+
+    if (error) throw error;
+  },
+
+  // Increment story views
+  async incrementViews(storyId: string) {
+    const { error } = await supabase
+      .rpc('increment_story_views', { story_id: storyId });
+
+    if (error) throw error;
   },
 };
 
