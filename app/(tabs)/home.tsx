@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [posts, setPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+  const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
@@ -177,11 +178,11 @@ export default function HomeScreen() {
 
 
       {/* Immersive Story Experience */}
-      <View style={[styles.storySection, { paddingTop: 20 }]}>
+      <View style={[styles.storySection, { paddingTop: 15 }]}>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.storiesContent, { paddingTop: 10 }]}
+          contentContainerStyle={[styles.storiesContent, { paddingTop: 5 }]}
           style={styles.storiesScroll}
         >
           {/* Add Your Story */}
@@ -204,6 +205,9 @@ export default function HomeScreen() {
               key={story.id} 
               style={styles.storyContainer}
               onPress={() => {
+                // Mark story as viewed
+                setViewedStories(prev => new Set([...prev, story.id]));
+                
                 router.push({
                   pathname: '/story-viewer',
                   params: { 
@@ -216,8 +220,14 @@ export default function HomeScreen() {
               <View style={styles.storyCircle}>
                 {/* Gradient Border */}
                 <LinearGradient
-                  colors={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']}
-                  style={styles.storyGradientBorder}
+                  colors={viewedStories.has(story.id) 
+                    ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.3)'] // Viewed: subtle gray
+                    : ['#E91E63', '#F06292', '#9C27B0', '#BA68C8'] // Unviewed: elegant pink-purple gradient
+                  }
+                  style={[
+                    styles.storyGradientBorder,
+                    viewedStories.has(story.id) ? styles.viewedStoryBorder : styles.unviewedStoryBorder
+                  ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
@@ -442,9 +452,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   storySection: {
-    marginTop: 40,
-    paddingHorizontal: 24,
-    marginBottom: 20,
+    marginTop: 30,
+    paddingHorizontal: 8,
+    marginBottom: 18,
   },
   sectionHeader: {
     color: 'white',
@@ -453,19 +463,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   storiesScroll: {
-    marginHorizontal: -8,
+    marginHorizontal: -4,
   },
   storiesContent: {
     paddingHorizontal: 8,
+    paddingLeft: 4,
+    alignItems: 'center',
   },
   addStoryCard: {
-    marginHorizontal: 8,
-    borderRadius: 20,
+    marginLeft: 0,
+    marginRight: 6,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   addStoryGradient: {
-    width: 80,
-    height: 100,
+    width: 70,
+    height: 85,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -473,36 +486,38 @@ const styles = StyleSheet.create({
   },
   addStoryText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 6,
   },
   storyContainer: {
     alignItems: 'center',
-    marginHorizontal: 12,
-    width: 75,
+    marginHorizontal: 8,
+    width: 85,
   },
   storyCircle: {
     position: 'relative',
     marginBottom: 8,
   },
   storyGradientBorder: {
-    width: 75,
-    height: 75,
-    borderRadius: 37.5,
-    padding: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    padding: 3.5,
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 10,
   },
   storyImageWrapper: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: 38.5,
     overflow: 'hidden',
-    backgroundColor: '#000',
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.98)',
   },
   storyCircularImage: {
     width: '100%',
@@ -511,28 +526,50 @@ const styles = StyleSheet.create({
   },
   storyAvatarOverlay: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
+    bottom: -3,
+    right: -3,
     backgroundColor: 'white',
-    borderRadius: 15,
+    borderRadius: 14,
     padding: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: '#4ECDC4',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   storyUserAvatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   storyUsername: {
     color: 'white',
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 6,
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+    letterSpacing: 0.2,
+  },
+  unviewedStoryBorder: {
+    // Elegant shadow for unviewed stories
+    shadowColor: '#E91E63',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  viewedStoryBorder: {
+    // Subtle shadow for viewed stories
+    shadowColor: 'rgba(255,255,255,0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   feedContainer: {
     paddingBottom: 120,
