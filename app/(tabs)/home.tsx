@@ -1,23 +1,69 @@
-import { View, FlatList, ScrollView, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image } from 'react-native';
-import { STORIES, POSTS, TRENDING_TOPICS, CURRENT_USER_PROFILE } from '@/constants/MockData';
-import StoryBubble from '@/components/feed/StoryBubble';
+import { View, FlatList, ScrollView, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, RefreshControl } from 'react-native';
+import { TRENDING_TOPICS } from '@/constants/MockData';
 import PostCard from '@/components/feed/PostCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
+import { postsApi, subscriptions } from '@/lib/api';
 
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const router = useRouter();
 
+  // Load posts on component mount
+  const loadPosts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await postsApi.getPosts(20, 0);
+      
+      // Transform the data to match the expected format
+      const transformedPosts = data.map(post => ({
+        id: post.id,
+        user: {
+          id: post.user.id,
+          name: post.user.name,
+          username: post.user.username,
+          avatar: post.user.avatar_url || `https://i.pravatar.cc/150?u=${post.user.id}`,
+          verified: post.user.verified || false,
+          location: post.location
+        },
+        images: post.images || [],
+        caption: post.content,
+        likes: post.likes?.length || 0,
+        timestamp: new Date(post.created_at).toLocaleString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          day: 'numeric',
+          month: 'short'
+        }),
+        location: post.location,
+        tags: post.tags || [],
+        comments: []
+      }));
+      
+      setPosts(transformedPosts);
+    } catch (error) {
+      console.error('Error loading posts:', error);
+      // Fallback to empty array if API fails
+      setPosts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
+    loadPosts();
+    
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     
     // Floating animation for background elements
@@ -36,13 +82,31 @@ export default function HomeScreen() {
       ])
     ).start();
 
-    return () => clearInterval(timer);
-  }, []);
+    // Subscribe to real-time post updates
+    const postSubscription = subscriptions.subscribeToposts((payload) => {
+      console.log('New post received:', payload);
+      // Reload posts when new post is created
+      loadPosts();
+    });
 
-  const handleRefresh = () => {
+    return () => {
+      clearInterval(timer);
+      if (postSubscription) {
+        postSubscription.unsubscribe();
+      }
+    };
+  }, [loadPosts]);
+
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 2000);
-  };
+    try {
+      await loadPosts();
+    } catch (error) {
+      console.error('Error refreshing posts:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadPosts]);
 
   const headerScale = scrollY.interpolate({
     inputRange: [0, 50],
@@ -170,15 +234,13 @@ export default function HomeScreen() {
             </LinearGradient>
           </TouchableOpacity>
           
-          {STORIES.slice(0, 6).map(story => (
-            <StoryBubble key={story.id} story={story} />
-          ))}
+          {/* Stories will be loaded dynamically from API */}
         </ScrollView>
       </View>
 
       {/* Revolutionary Card Stack Feed */}
       <Animated.FlatList
-        data={POSTS}
+        data={posts}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item, index }) => <PostCard post={item} index={index} />}
         onScroll={Animated.event(
@@ -186,11 +248,25 @@ export default function HomeScreen() {
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
-        refreshing={refreshing}
-        onRefresh={handleRefresh}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="white"
+            colors={['#667eea', '#764ba2']}
+          />
+        }
         contentContainerStyle={styles.feedContainer}
         showsVerticalScrollIndicator={false}
         style={styles.feedList}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No posts yet</Text>
+              <Text style={styles.emptySubtext}>Be the first to share something!</Text>
+            </View>
+          ) : null
+        }
       />
 
       {/* Floating Action Hub */}
@@ -437,5 +513,31 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 6,
+  },
+  emptySubtext: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 });

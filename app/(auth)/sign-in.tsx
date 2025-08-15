@@ -57,13 +57,20 @@ export default function SignInScreen() {
     
     setLoading(true);
     try {
-      await signIn(email, password);
-      router.replace('/(tabs)/home');
+      const result = await signIn(email, password);
+      if (result?.error) {
+        Alert.alert('Error', result.error);
+        return;
+      }
+      
+      // Successfully signed in - layout will handle redirect automatically
+      console.log('Sign in successful, auth state will trigger redirect');
     } catch (error) {
       console.error('Sign in error:', error);
-      Alert.alert('Error', 'Invalid email or password');
+      Alert.alert('Error', 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleForgotPassword = () => {

@@ -1,6 +1,6 @@
 import { View, Text, FlatList, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { USERS, POSTS } from '@/constants/MockData';
+// Removed static data imports
 import { useState, useRef, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -17,10 +17,10 @@ export default function UserProfileScreen() {
   const floatingAnimation = useRef(new Animated.Value(0)).current;
 
   // Find user by ID
-  const user = USERS.find(u => u.id.toString() === id);
+  const user = null // TODO: Load from API;
   
   // Get user's posts
-  const userPosts = POSTS.filter(post => post.user.id.toString() === id);
+  const userPosts: any[] = []; // TODO: Load user posts from API
 
   useEffect(() => {
     // Entrance animation
@@ -82,7 +82,7 @@ export default function UserProfileScreen() {
   const renderPostGrid = () => {
     return (
       <View style={styles.postsGrid}>
-        {userPosts.length > 0 ? (
+        {Array.isArray(userPosts) && userPosts.length > 0 ? (
           userPosts.map((post, index) => (
             <Animated.View 
               key={post.id}
@@ -162,7 +162,7 @@ export default function UserProfileScreen() {
 
     return (
       <View style={styles.activityFeed}>
-        {activities.map((activity, index) => (
+        {Array.isArray(activities) ? activities.map((activity, index) => (
           <Animated.View 
             key={activity.id}
             style={[
@@ -209,7 +209,7 @@ export default function UserProfileScreen() {
               </BlurView>
             </LinearGradient>
           </Animated.View>
-        ))}
+        )) : null}
       </View>
     );
   };

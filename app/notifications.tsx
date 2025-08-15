@@ -9,7 +9,7 @@ import {
   StyleSheet, 
   Dimensions 
 } from 'react-native';
-import { NOTIFICATIONS } from '@/constants/MockData';
+// Removed static data imports
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -270,7 +270,7 @@ export default function NotificationsScreen() {
       {/* Notifications List */}
       <View style={styles.notificationsList}>
         <FlatList
-          data={selectedTab === 'unread' ? NOTIFICATIONS.filter(n => !n.read) : NOTIFICATIONS}
+          data={[]}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderNotificationItem}
           ListEmptyComponent={EmptyState}

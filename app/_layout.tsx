@@ -1,8 +1,7 @@
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import '../global.css';
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
@@ -25,6 +24,39 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    console.log('Layout: Auth state check - loading:', loading, 'user:', !!user, 'segments:', segments);
+    
+    if (loading) {
+      console.log('Layout: Still loading auth, waiting...');
+      return; // Wait for auth to load
+    }
+
+    const inTabsGroup = segments[0] === '(tabs)';
+
+    if (user) {
+      console.log('Layout: User is signed in, checking if redirect needed');
+      // User is signed in, redirect to home if they're not already in a protected route
+      if (!inTabsGroup && segments[0] !== 'create-post' && segments[0] !== 'messages' && segments[0] !== 'chat' && segments[0] !== 'notifications' && segments[0] !== 'user' && segments[0] !== 'post' && segments[0] !== 'comments') {
+        console.log('Layout: Redirecting to home...');
+        router.replace('/(tabs)/home');
+      } else {
+        console.log('Layout: User already in protected route, no redirect needed');
+      }
+    } else {
+      console.log('Layout: User not signed in, checking if protection needed');
+      // User is not signed in, redirect to welcome/auth if they're trying to access protected routes
+      if (inTabsGroup || segments[0] === 'create-post' || segments[0] === 'messages' || segments[0] === 'chat' || segments[0] === 'notifications' || segments[0] === 'user' || segments[0] === 'post' || segments[0] === 'comments') {
+        console.log('Layout: Redirecting to welcome screen...');
+        router.replace('/');
+      }
+    }
+  }, [user, loading, segments]);
+
   return (
     <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />

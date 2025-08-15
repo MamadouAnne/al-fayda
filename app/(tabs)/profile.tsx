@@ -1,22 +1,59 @@
 import { View, Text, FlatList, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CURRENT_USER_PROFILE } from '@/constants/MockData';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { postsApi, usersApi } from '@/lib/api';
 
 const { width, height } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, profile: currentUser, signOut, session, loading: isLoading } = useAuth();
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('Profile screen - user:', !!user, 'profile:', !!currentUser, 'loading:', isLoading);
+    if (currentUser) {
+      console.log('Profile data:', { name: currentUser.name, username: currentUser.username, email: currentUser.email });
+    }
+  }, [user, currentUser, isLoading]);
   const [selectedTab, setSelectedTab] = useState('posts');
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
-  
-  const user = CURRENT_USER_PROFILE;
+
+  const loadUserPosts = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      setLoading(true);
+      const posts = await postsApi.getPostsByUser(currentUser.id, 20, 0);
+      
+      // Transform posts data for the UI with proper null checks
+      const transformedPosts = Array.isArray(posts) ? posts.map(post => ({
+        id: post?.id || '',
+        image: post?.images?.[0] || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80',
+        likes: post?.likes?.length || 0
+      })) : [];
+      
+      setUserPosts(transformedPosts);
+    } catch (error) {
+      console.error('Error loading user posts:', error);
+      setUserPosts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
+    if (currentUser) {
+      loadUserPosts();
+    }
+    
     // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnimation, {
@@ -39,7 +76,7 @@ export default function ProfileScreen() {
         ])
       ),
     ]).start();
-  }, []);
+  }, [currentUser, loadUserPosts]);
 
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
@@ -50,11 +87,65 @@ export default function ProfileScreen() {
     setSelectedTab(tab);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.replace('/sign-in');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  // Show loading state while auth is loading
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Text style={styles.notAuthenticatedText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // If no session at all, redirect to sign in
+  if (!session) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Text style={styles.notAuthenticatedText}>Please sign in to view your profile</Text>
+        <TouchableOpacity 
+          style={styles.signInButton}
+          onPress={() => router.push('/sign-in')}
+        >
+          <Text style={styles.signInButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // If session exists but user profile hasn't loaded yet, show loading
+  if (!currentUser) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Text style={styles.notAuthenticatedText}>Loading your profile...</Text>
+      </View>
+    );
+  }
+
   const renderPostGrid = () => {
     return (
       <View style={styles.postsGrid}>
-        {user.posts.length > 0 ? (
-          user.posts.map((post, index) => (
+        {Array.isArray(userPosts) && userPosts.length > 0 ? (
+          userPosts.map((post, index) => (
             <Animated.View 
               key={post.id}
               style={[
@@ -128,7 +219,7 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.activityFeed}>
-        {activities.map((activity, index) => (
+        {Array.isArray(activities) ? activities.map((activity, index) => (
           <Animated.View 
             key={activity.id}
             style={[
@@ -175,7 +266,7 @@ export default function ProfileScreen() {
               </BlurView>
             </LinearGradient>
           </Animated.View>
-        ))}
+        )) : null}
       </View>
     );
   };
@@ -218,12 +309,12 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             
             <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>{user.username}</Text>
+              <Text style={styles.headerTitle}>{currentUser.username || currentUser.name}</Text>
             </View>
             
-            <TouchableOpacity style={styles.moreButton}>
+            <TouchableOpacity style={styles.moreButton} onPress={handleSignOut}>
               <BlurView intensity={20} tint="light" style={styles.moreButtonBlur}>
-                <Ionicons name="settings" size={24} color="white" />
+                <Ionicons name="log-out" size={24} color="white" />
               </BlurView>
             </TouchableOpacity>
           </View>
@@ -239,10 +330,15 @@ export default function ProfileScreen() {
                 colors={['#f093fb', '#f5576c', '#4facfe', '#00f2fe']}
                 style={styles.avatarRing}
               >
-                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                <Image 
+                  source={{ 
+                    uri: (currentUser as any).avatar_url || `https://i.pravatar.cc/150?u=${currentUser.id}` 
+                  }} 
+                  style={styles.avatar} 
+                />
               </LinearGradient>
               <View style={styles.onlineIndicator} />
-              {user.verified && (
+              {currentUser.verified && (
                 <View style={styles.verifiedBadge}>
                   <Ionicons name="checkmark" size={16} color="white" />
                 </View>
@@ -251,35 +347,37 @@ export default function ProfileScreen() {
             
             <View style={styles.userDetails}>
               <View style={styles.nameRow}>
-                <Text style={styles.userName}>{user.name}</Text>
+                <Text style={styles.userName}>{currentUser.name}</Text>
               </View>
-              <Text style={styles.userUsername}>{user.username}</Text>
-              <View style={styles.locationRow}>
-                <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.locationText}>{user.location}</Text>
-              </View>
+              <Text style={styles.userUsername}>{currentUser.username}</Text>
+              {currentUser.location && (
+                <View style={styles.locationRow}>
+                  <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
+                  <Text style={styles.locationText}>{currentUser.location}</Text>
+                </View>
+              )}
             </View>
           </View>
 
           {/* Bio Section */}
-          {user.bio && (
+          {currentUser.bio && (
             <View style={styles.bioSection}>
-              <Text style={styles.bioText}>{user.bio}</Text>
+              <Text style={styles.bioText}>{currentUser.bio}</Text>
             </View>
           )}
 
           {/* Stats */}
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.posts.length}</Text>
+              <Text style={styles.statNumber}>{currentUser.posts_count || userPosts.length}</Text>
               <Text style={styles.statLabel}>Posts</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{(user.followers / 1000).toFixed(1)}k</Text>
+              <Text style={styles.statNumber}>{currentUser.followers_count || 0}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.following}</Text>
+              <Text style={styles.statNumber}>{currentUser.following_count || 0}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
           </View>
@@ -807,5 +905,29 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  notAuthenticatedText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 6,
+  },
+  signInButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  signInButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });

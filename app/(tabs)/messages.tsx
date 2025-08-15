@@ -1,5 +1,5 @@
 import { View, Text, FlatList, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput } from 'react-native';
-import { CHATS } from '@/constants/MockData';
+// Removed static data imports
 import ChatListItem from '@/components/messaging/ChatListItem';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -45,10 +45,7 @@ export default function MessagesTab() {
     outputRange: [0, -8],
   });
 
-  const filteredChats = CHATS.filter(chat => {
-    const user = chat.users.find(u => !('isCurrentUser' in u && u.isCurrentUser));
-    return user?.name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredChats: any[] = []; // TODO: Load from API and implement search filter
 
   const renderChatItem = ({ item, index }: { item: any; index: number }) => (
     <Animated.View 

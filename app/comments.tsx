@@ -1,16 +1,69 @@
 import { View, Text, FlatList, TextInput } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { POSTS } from '@/constants/MockData';
+import { useLocalSearchParams } from 'expo-router';
+import { useState, useEffect } from 'react';
 import CommentThread from '@/components/feed/CommentThread';
 import PostCard from '@/components/feed/PostCard';
+import { postsApi } from '@/lib/api';
 
 export default function CommentsScreen() {
-  const router = useRouter();
-  const { postId } = useLocalSearchParams();
-  const post = POSTS.find(p => p.id.toString() === postId);
+  let params;
+  let postId;
+  
+  try {
+    params = useLocalSearchParams();
+    postId = params?.postId;
+  } catch (error) {
+    console.error('Error getting search params:', error);
+    params = {};
+    postId = null;
+  }
+  const [post, setPost] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadPost = async () => {
+    if (!postId) return;
+    
+    try {
+      setLoading(true);
+      console.log('Loading post for comments with ID:', postId);
+      
+      const postData = await postsApi.getPost(postId as string);
+      console.log('Post loaded for comments:', postData);
+      
+      setPost(postData);
+    } catch (error) {
+      console.error('Error loading post for comments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPost();
+  }, [postId]);
+
+  if (!postId) {
+    return (
+      <View className="flex-1 bg-gray-50 dark:bg-black items-center justify-center">
+        <Text className="text-gray-500">Invalid post ID.</Text>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-gray-50 dark:bg-black items-center justify-center">
+        <Text className="text-gray-500">Loading comments...</Text>
+      </View>
+    );
+  }
 
   if (!post) {
-    return <View><Text>Post not found.</Text></View>;
+    return (
+      <View className="flex-1 bg-gray-50 dark:bg-black items-center justify-center">
+        <Text className="text-gray-500">Post not found.</Text>
+      </View>
+    );
   }
 
   return (

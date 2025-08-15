@@ -4,11 +4,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
 export default function SignUpScreen() {
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,7 +18,7 @@ export default function SignUpScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const { signUp } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const slideAnimation = useRef(new Animated.Value(50)).current;
@@ -54,32 +56,83 @@ export default function SignUpScreen() {
   }, []);
 
   const handleSignUp = async () => {
-    if (!fullName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-    if (!agreeToTerms) {
-      Alert.alert('Error', 'Please agree to the Terms of Service');
-      return;
-    }
+    console.log('=== handleSignUp function started ===');
+    console.log('Form values:', { fullName, username, email, password: 'hidden', confirmPassword: 'hidden' });
     
-    setLoading(true);
     try {
-      await signUp(fullName, email, password);
-      router.replace('/(tabs)/home');
+      console.log('Starting validation...');
+      // Basic validation (exact copy from senecom)
+      if (!fullName.trim()) {
+        console.log('Validation failed: fullName is empty');
+        alert('Please enter your full name');
+        return;
+      }
+      if (!username.trim()) {
+        alert('Please enter your username');
+        return;
+      }
+      if (!email.trim()) {
+        alert('Please enter your email');
+        return;
+      }
+      if (!password.trim()) {
+        alert('Please enter your password');
+        return;
+      }
+      if (password !== confirmPassword) {
+        alert('Passwords do not match');
+        return;
+      }
+
+      // Pass user metadata to the signUp function
+      console.log('Validation passed, calling supabase.auth.signUp with metadata...');
+      const {
+        data: { user },
+        error: signUpError,
+      } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            username: username.trim(),
+          },
+        },
+      });
+      console.log('Supabase signup completed:', { hasUser: !!user, error: signUpError });
+
+      if (signUpError) {
+        console.error('Signup error:', signUpError);
+        Alert.alert('Error', signUpError.message);
+        return;
+      }
+
+      if (user) {
+        console.log('User created successfully! ID:', user.id);
+        console.log('Profile will be created automatically by trigger');
+        
+        // Since email confirmation is disabled, user is immediately signed in
+        // Navigate directly to home page
+        Alert.alert(
+          'Welcome!', 
+          'Your account has been created successfully!',
+          [{ 
+            text: 'Get Started', 
+            onPress: () => router.replace('/(tabs)/home') 
+          }]
+        );
+      } else {
+        // Fallback case - shouldn't happen with email confirmation disabled
+        Alert.alert(
+          'Account Created',
+          'Welcome to the app!',
+          [{ text: 'Continue', onPress: () => router.replace('/(tabs)/home') }]
+        );
+      }
     } catch (error) {
-      console.error('Sign up error:', error);
+      console.error('Signup error:', error);
       Alert.alert('Error', 'Failed to create account. Please try again.');
     }
-    setLoading(false);
   };
 
   const floatingY = floatingAnimation.interpolate({
@@ -149,6 +202,24 @@ export default function SignUpScreen() {
                     value={fullName}
                     onChangeText={setFullName}
                     autoCapitalize="words"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Username Input */}
+            <View style={styles.inputGroup}>
+              <View style={styles.inputContainer}>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="at-outline" size={20} color="rgba(255,255,255,0.7)" />
+                  <TextInput
+                    placeholder="Username"
+                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     style={styles.textInput}
                   />
                 </View>
@@ -240,15 +311,20 @@ export default function SignUpScreen() {
 
             {/* Sign Up Button */}
             <TouchableOpacity 
-              onPress={handleSignUp}
-              disabled={loading || !agreeToTerms || !fullName || !email || !password || !confirmPassword}
+              onPress={() => {
+                console.log('Button pressed');
+                console.log('Button disabled?', loading || !agreeToTerms || !fullName || !username || !email || !password || !confirmPassword);
+                console.log('Debug values:', { loading, agreeToTerms, fullName: !!fullName, username: !!username, email: !!email, password: !!password, confirmPassword: !!confirmPassword });
+                handleSignUp();
+              }}
+              disabled={loading || !agreeToTerms || !fullName || !username || !email || !password || !confirmPassword}
               style={[
                 styles.primaryButton,
-                (!agreeToTerms || !fullName || !email || !password || !confirmPassword) && styles.primaryButtonDisabled
+                (!agreeToTerms || !fullName || !username || !email || !password || !confirmPassword) && styles.primaryButtonDisabled
               ]}
             >
               <LinearGradient
-                colors={(!agreeToTerms || !fullName || !email || !password || !confirmPassword) 
+                colors={(!agreeToTerms || !fullName || !username || !email || !password || !confirmPassword) 
                   ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'] 
                   : ['#FF6B6B', '#4ECDC4']
                 }

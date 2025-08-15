@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useRef, useEffect } from 'react';
-import { POSTS } from '@/constants/MockData';
+// Removed POSTS import - using static images instead
 
 const { width } = Dimensions.get('window');
 
@@ -17,19 +17,19 @@ export default function IndexScreen() {
     {
       title: 'Connect & Share',
       description: 'Share your moments with beautiful posts and stories',
-      image: POSTS[0]?.images[0] || 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=500&q=80',
+      image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=500&q=80',
       icon: 'heart'
     },
     {
       title: 'Discover Content',
       description: 'Explore trending topics and find new creators',
-      image: POSTS[1]?.images[0] || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=500&q=80',
+      image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=500&q=80',
       icon: 'compass'
     },
     {
       title: 'Build Community',
       description: 'Connect with friends and grow your network',
-      image: POSTS[2]?.images[0] || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&q=80',
+      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&q=80',
       icon: 'people'
     }
   ];

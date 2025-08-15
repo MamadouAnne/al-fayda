@@ -1,5 +1,5 @@
 import { View, FlatList, TextInput, Text, TouchableOpacity, ScrollView, Image, StatusBar, Animated, StyleSheet, Dimensions } from 'react-native';
-import { USERS, POSTS, DISCOVER_CATEGORIES, TRENDING_TOPICS, FEATURED_CREATORS } from '@/constants/MockData';
+import { DISCOVER_CATEGORIES, TRENDING_TOPICS } from '@/constants/MockData';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -15,7 +15,7 @@ export default function SearchScreen() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllTrending, setShowAllTrending] = useState(false);
-  const [displayedPosts, setDisplayedPosts] = useState(POSTS.slice(0, 6));
+  const [displayedPosts, setDisplayedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const searchAnimation = useRef(new Animated.Value(0)).current;
@@ -64,8 +64,8 @@ export default function SearchScreen() {
     };
 
     const keywords = categoryKeywords[category as keyof typeof categoryKeywords] || categoryKeywords['For You'];
-    const basePosts = [...POSTS];
-    const newPosts = [];
+    const basePosts: any[] = []; // TODO: Replace with API call
+    const newPosts: any[] = [];
 
     for (let i = 0; i < count; i++) {
       const randomPost = basePosts[Math.floor(Math.random() * basePosts.length)];
@@ -87,15 +87,9 @@ export default function SearchScreen() {
     return newPosts;
   };
 
-  const filteredUsers = USERS.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers: any[] = []; // TODO: Replace with API call to search users
 
-  const filteredPosts = POSTS.filter(post =>
-    post.caption.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredPosts: any[] = []; // TODO: Replace with API call to search posts
 
   // Filter posts by category
   const getFilteredPostsByCategory = (category: string) => {
@@ -111,7 +105,7 @@ export default function SearchScreen() {
 
     const relevantTags = categoryTags[category as keyof typeof categoryTags] || [];
     return displayedPosts.filter(post => 
-      post.tags?.some(tag => relevantTags.includes(tag)) ||
+      post.tags?.some((tag: string) => relevantTags.includes(tag)) ||
       post.caption.toLowerCase().includes(category.toLowerCase())
     );
   };
@@ -135,12 +129,11 @@ export default function SearchScreen() {
 
   // Reset posts when category changes
   useEffect(() => {
-    const initialPosts = selectedCategory === 'For You' 
-      ? POSTS.slice(0, 6)
-      : [...POSTS.slice(0, 3), ...generateRelatedPosts(selectedCategory, [], 3)];
+    // TODO: Replace with API call to get posts by category
+    const initialPosts: any[] = [];
     
     setDisplayedPosts(initialPosts);
-    setHasMorePosts(true);
+    setHasMorePosts(false);
   }, [selectedCategory]);
 
   const handleSearchFocus = () => {
@@ -570,7 +563,7 @@ export default function SearchScreen() {
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.creatorsScroll}>
               <View style={styles.creatorsContainer}>
-                {FEATURED_CREATORS.map((creator, index) => (
+                {[].map((creator: any, index: number) => (
                   <Animated.View 
                     key={creator.id} 
                     style={[styles.creatorCard, {

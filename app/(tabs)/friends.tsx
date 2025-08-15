@@ -1,5 +1,5 @@
 import { View, Text, FlatList, TouchableOpacity, ScrollView, Image, StatusBar, Animated, StyleSheet, Dimensions } from 'react-native';
-import { FRIEND_REQUESTS, SUGGESTED_FRIENDS, USERS, CURRENT_USER_PROFILE } from '@/constants/MockData';
+// Removed static data imports - using Supabase API instead
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 const { width, height } = Dimensions.get('window');
 
 export default function FriendsScreen() {
-  const [requests, setRequests] = useState(FRIEND_REQUESTS);
+  const [requests, setRequests] = useState<any[]>([]);
   const [selectedTab, setSelectedTab] = useState('requests');
   const router = useRouter();
   const slideAnimation = useRef(new Animated.Value(0)).current;
@@ -173,13 +173,13 @@ export default function FriendsScreen() {
         <Text style={styles.friendsTitle}>My Friends</Text>
         <View style={styles.friendsCountBadge}>
           <BlurView intensity={15} tint="light" style={styles.countBlur}>
-            <Text style={styles.friendsCount}>{CURRENT_USER_PROFILE.friends} total</Text>
+            <Text style={styles.friendsCount}>0 total</Text>
           </BlurView>
         </View>
       </View>
       
       <View style={styles.friendsGrid}>
-        {USERS.slice(0, 6).map((user, index) => (
+        {[].map((user: any, index: number) => (
           <Animated.View 
             key={user.id}
             style={[
@@ -365,7 +365,7 @@ export default function FriendsScreen() {
         {selectedTab === 'suggestions' && (
           <View style={styles.contentContainer}>
             <Text style={styles.sectionTitle}>People You May Know</Text>
-            {SUGGESTED_FRIENDS.map((suggestion) => (
+            {[].map((suggestion: any) => (
               <SuggestedFriendCard key={suggestion.id} suggestion={suggestion} />
             ))}
           </View>

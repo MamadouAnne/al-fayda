@@ -1,6 +1,6 @@
 import { View, Text, FlatList, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { CHATS, USERS } from '@/constants/MockData';
+// Removed static data imports - will use API data instead
 import ChatBubble from '@/components/messaging/ChatBubble';
 import { useState, useRef, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,29 +12,15 @@ const { width, height } = Dimensions.get('window');
 export default function ChatScreen() {
   const { id, userName } = useLocalSearchParams();
   
-  // First try to find existing chat by chat ID
-  let chat = CHATS.find(c => c.id.toString() === id);
-  let otherUser = null;
-  
-  // If no chat found, try to find user by user ID and create a new chat context
-  if (!chat) {
-    const user = USERS.find(u => u.id.toString() === id);
-    if (user) {
-      // Create a temporary chat object for new conversation
-      otherUser = user;
-      chat = {
-        id: parseInt(id as string),
-        users: [{ ...USERS[0], isCurrentUser: true }, user], // Assume USERS[0] is current user
-        messages: [], // Empty messages for new chat
-        lastMessage: '',
-        timestamp: 'now',
-        unread: 0
-      };
-    }
-  } else {
-    // Find the other user in existing chat
-    otherUser = chat.users.find((u: any) => !('isCurrentUser' in u && u.isCurrentUser));
-  }
+  // TODO: Replace with API calls to get chat data
+  let chat = null; // Will be loaded from API
+  let otherUser = userName ? { 
+    name: userName, 
+    avatar: `https://i.pravatar.cc/150?u=${id}` 
+  } : { 
+    name: 'User', 
+    avatar: `https://i.pravatar.cc/150?u=${id}` 
+  };
   
   const [messageText, setMessageText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -94,7 +80,7 @@ export default function ChatScreen() {
         id: messages.length + 1,
         text: messageText.trim(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        user: USERS[0], // Current user (assume USERS[0] is current user)
+        user: { name: 'You', avatar: 'https://i.pravatar.cc/150?u=current' }, // Current user placeholder
         isRead: false
       };
       
