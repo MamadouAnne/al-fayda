@@ -14,6 +14,7 @@ import {
   Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -158,21 +159,42 @@ export default function EditProfileScreen() {
           }
         }
         
+        const getContentType = (extension) => {
+          switch (extension.toLowerCase()) {
+            case 'jpg':
+            case 'jpeg':
+              return 'image/jpeg';
+            case 'png':
+              return 'image/png';
+            case 'gif':
+              return 'image/gif';
+            default:
+              return `image/${extension}`;
+          }
+        };
+
         // Create file name for upload
         const fileExtension = asset.uri.split('.').pop();
-        const fileName = `avatar_${currentUser?.id}.${fileExtension}`;
+        const fileName = `avatar_${currentUser?.id}_${new Date().getTime()}.${fileExtension}`;
+        const contentType = getContentType(fileExtension);
         
-        // Convert image to blob for upload
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
+        // Convert image to array buffer for upload
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const decoded = atob(base64);
+        const uint8Array = new Uint8Array(decoded.length);
+        for (let i = 0; i < decoded.length; i++) {
+          uint8Array[i] = decoded.charCodeAt(i);
+        }
 
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(fileName, blob, {
+          .upload(fileName, uint8Array.buffer, {
             cacheControl: '3600',
-            upsert: true,
-            contentType: `image/${fileExtension}`,
+            upsert: false,
+            contentType: contentType,
           });
 
         if (uploadError) {
@@ -383,8 +405,7 @@ export default function EditProfileScreen() {
                     source={{ uri: avatar || currentUser.avatar }} 
                     style={styles.avatar}
                     onError={(error) => {
-                      console.log('Avatar loading error:', error);
-                      setAvatar(null);
+                      console.log('Avatar loading error:', error.nativeEvent);
                     }}
                     onLoad={() => {
                       console.log('Avatar loaded successfully');
