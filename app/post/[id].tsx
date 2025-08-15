@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, FlatList, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { postsApi } from '@/lib/api';
+import { postsApi, commentsApi } from '@/lib/api';
 import { Post, Comment, User } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -686,6 +686,39 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     opacity: 0.5,
   },
+  
+  // Comments Display Section
+  commentsDisplaySection: {
+    paddingHorizontal: 15,
+    marginBottom: 15,
+  },
+  commentsContainer: {
+    gap: 8,
+  },
+  commentDisplayItem: {
+    marginBottom: 6,
+  },
+  commentUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  commentDisplayAuthor: {
+    fontWeight: '600',
+    color: 'white',
+    fontSize: 14,
+  },
+  commentDisplayUsername: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+  },
+  commentDisplayText: {
+    color: 'white',
+    fontSize: 14,
+    lineHeight: 18,
+    paddingLeft: 0,
+  },
 });
 
 export default function PostDetailScreen() {
@@ -699,7 +732,6 @@ export default function PostDetailScreen() {
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [likesCount, setLikesCount] = useState<number>(0);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
-  const [showComments, setShowComments] = useState<boolean>(false);
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [otherUserPosts, setOtherUserPosts] = useState<Post[]>([]);
@@ -717,7 +749,7 @@ export default function PostDetailScreen() {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
-  const [comments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -735,6 +767,23 @@ export default function PostDetailScreen() {
       return;
     }
   }, [safePostId, router]);
+
+  const loadComments = async () => {
+    if (!safePostId) return;
+    
+    try {
+      console.log('Loading comments for post:', safePostId);
+      const commentsData = await commentsApi.getComments(safePostId);
+      console.log('Comments loaded:', commentsData);
+      
+      if (commentsData) {
+        setComments(commentsData);
+      }
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      setComments([]);
+    }
+  };
 
   const loadPost = async () => {
     if (!safePostId) return;
@@ -760,6 +809,9 @@ export default function PostDetailScreen() {
       setPostImages(postData.images ?? []);
       setPostTags(postData.tags ?? []);
       setPostUser(postData.user ?? { id: '', name: 'Unknown User', username: 'unknown' });
+      
+      // Load comments for this post
+      await loadComments();
       
       // Load other posts from the same user
       if (postData.userId) {
@@ -868,55 +920,6 @@ export default function PostDetailScreen() {
     );
   }, [postImages.length]);
 
-  const renderComment = useCallback(({ item }: { item: Comment }) => (
-    <Animated.View style={[styles.commentItem, { opacity: fadeAnimation }]}>
-      <LinearGradient
-        colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.05)']}
-        style={styles.commentGradient}
-      >
-        <BlurView intensity={10} tint="dark" style={styles.commentBlur}>
-          <View style={styles.commentContent}>
-            <TouchableOpacity onPress={() => item.user?.id && router.push(`/user/${item.user.id}`)} style={styles.commentUser}>
-              <View style={styles.commentAvatarContainer}>
-                <LinearGradient
-                  colors={['#f093fb', '#f5576c', '#4facfe', '#00f2fe']}
-                  style={styles.commentAvatarRing}
-                >
-                  <Image 
-                    source={item.user?.avatar ? { uri: item.user.avatar } : require('@/assets/images/icon.png')} 
-                    style={styles.commentAvatar} 
-                  />
-                </LinearGradient>
-              </View>
-              <View style={styles.commentUserInfo}>
-                <View style={styles.commentNameRow}>
-                  <Text style={styles.commentUserName}>{item.user?.name || 'Unknown User'}</Text>
-                  {item.user?.verified && (
-                    <View style={styles.commentVerifiedBadge}>
-                      <Ionicons name="checkmark" size={10} color="white" />
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.commentTimestamp}>{item.created_at}</Text>
-              </View>
-            </TouchableOpacity>
-            
-            <Text style={styles.commentText}>{item.content}</Text>
-            
-            <View style={styles.commentActions}>
-              <TouchableOpacity style={styles.commentLike}>
-                <Ionicons name="heart-outline" size={16} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.commentLikeText}>{item.likes_count}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.commentReply}>
-                <Text style={styles.commentReplyText}>Reply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </BlurView>
-      </LinearGradient>
-    </Animated.View>
-  ), [fadeAnimation, router]);
 
   if (!safePostId) {
     return (
@@ -999,13 +1002,27 @@ export default function PostDetailScreen() {
     setShowCommentInput(true);
   };
 
-  const handleSendComment = () => {
-    if (commentText.trim()) {
-      // TODO: Implement actual comment sending logic
-      console.log('Sending comment:', commentText);
-      setCommentText('');
-      setShowCommentInput(false);
-      Keyboard.dismiss();
+  const handleSendComment = async () => {
+    if (commentText.trim() && safePostId) {
+      try {
+        console.log('Creating comment:', commentText);
+        
+        // Create comment using the API
+        const newComment = await commentsApi.createComment(safePostId, commentText.trim());
+        console.log('Comment created:', newComment);
+        
+        // Add the new comment to the beginning of the list (most recent first)
+        setComments(prevComments => [newComment, ...prevComments]);
+        
+        // Clear input and hide
+        setCommentText('');
+        setShowCommentInput(false);
+        Keyboard.dismiss();
+      } catch (error) {
+        console.error('Error creating comment:', error);
+        // You could show an error message to the user here
+        alert('Failed to add comment. Please try again.');
+      }
     }
   };
 
@@ -1184,10 +1201,7 @@ export default function PostDetailScreen() {
 
         {/* Post Images */}
         <Animated.View style={[styles.imagesSection, { opacity: fadeAnimation }]}>
-          <FlatList
-            data={postImages || []}
-            renderItem={renderImageItem}
-            keyExtractor={(item, index) => index.toString()}
+          <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -1196,7 +1210,11 @@ export default function PostDetailScreen() {
               const newIndex = Math.round(offsetX / width);
               setCurrentImageIndex(newIndex);
             }}
-          />
+          >
+            {(postImages || []).map((item, index) => 
+              renderImageItem({ item, index })
+            )}
+          </ScrollView>
           
           {(postImages?.length || 0) > 1 && (
             <View style={styles.dotsContainer}>
@@ -1296,27 +1314,25 @@ export default function PostDetailScreen() {
         </Animated.View>
 
         {/* Comments Section */}
-        {showComments && (
-          <Animated.View style={[styles.commentsSection, { opacity: fadeAnimation }]}>
-            <View style={styles.commentsSectionHeader}>
-              <Text style={styles.commentsSectionTitle}>Comments</Text>
-              <TouchableOpacity onPress={() => setShowComments(false)}>
-                <Ionicons name="chevron-up" size={20} color="rgba(255,255,255,0.7)" />
-              </TouchableOpacity>
+        <Animated.View style={[styles.commentsDisplaySection, { opacity: fadeAnimation }]}>
+          {comments.length > 0 ? (
+            <View style={styles.commentsContainer}>
+              {comments.map((comment) => (
+                <View key={comment.id} style={styles.commentDisplayItem}>
+                  <TouchableOpacity 
+                    onPress={() => comment.user?.id && router.push(`/user/${comment.user.id}`)}
+                    style={styles.commentUserRow}
+                  >
+                    <Text style={styles.commentDisplayAuthor}>{comment.user?.name || 'Unknown User'}</Text>
+                    <Text style={styles.commentDisplayUsername}>@{comment.user?.username || 'unknown'}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.commentDisplayText}>{comment.content}</Text>
+                </View>
+              ))}
             </View>
-            
-            {comments.length > 0 ? (
-              <FlatList
-                data={comments}
-                keyExtractor={(item) => item.id}
-                renderItem={renderComment}
-                contentContainerStyle={styles.commentsList}
-              />
-            ) : (
-              <Text style={styles.noCommentsText}>No comments yet. Be the first to comment!</Text>
-            )}
-          </Animated.View>
-        )}
+          ) : null}
+        </Animated.View>
+
 
         {/* More from this user */}
         {otherUserPosts.length > 0 && (
@@ -1353,16 +1369,21 @@ export default function PostDetailScreen() {
               </View>
             </View>
             
-            <FlatList
-              data={(otherUserPosts || []).slice(0, 6)} // Show up to 6 posts
-              renderItem={renderOtherPost}
-              keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
-              numColumns={2}
-              scrollEnabled={false}
-              columnWrapperStyle={styles.otherPostsRow}
-              style={styles.otherPostsList}
-              contentContainerStyle={styles.otherPostsContent}
-            />
+            <View style={styles.otherPostsList}>
+              <View style={styles.otherPostsContent}>
+                {(otherUserPosts || []).slice(0, 6).reduce((rows: any[][], item, index) => {
+                  if (index % 2 === 0) rows.push([]);
+                  rows[rows.length - 1].push(item);
+                  return rows;
+                }, []).map((row: any[], rowIndex: number) => (
+                  <View key={rowIndex} style={styles.otherPostsRow}>
+                    {row.map((item: any, itemIndex: number) => 
+                      renderOtherPost({ item, index: rowIndex * 2 + itemIndex })
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
             
             {otherUserPosts.length > 6 && (
               <TouchableOpacity onPress={handleUserPress} style={styles.viewMoreButton}>

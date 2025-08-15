@@ -169,51 +169,6 @@ export default function HomeScreen() {
       </View>
 
 
-      {/* Header with Notifications and Messages */}
-      <Animated.View style={[styles.topHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
-        <BlurView intensity={20} tint="dark" style={styles.headerBlur}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.greetingText}>{getGreeting()}</Text>
-              <Text style={styles.headerSubtitle}>Welcome back!</Text>
-            </View>
-            
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-                  style={styles.headerButtonGradient}
-                >
-                  <Ionicons name="notifications-outline" size={22} color="white" />
-                  {/* Notification badge */}
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.badgeText}>3</Text>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={() => router.push('/messages')}
-              >
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-                  style={styles.headerButtonGradient}
-                >
-                  <Ionicons name="mail-outline" size={22} color="white" />
-                  {/* Message badge */}
-                  <View style={styles.messageBadge}>
-                    <Text style={styles.badgeText}>2</Text>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </BlurView>
-      </Animated.View>
 
       {/* Immersive Story Experience */}
       <View style={[styles.storySection, { paddingTop: 20 }]}>
@@ -434,7 +389,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   storySection: {
-    marginTop: 120,
+    marginTop: 40,
     paddingHorizontal: 24,
     marginBottom: 20,
   },

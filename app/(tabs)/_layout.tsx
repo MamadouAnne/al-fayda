@@ -74,6 +74,22 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       gradient: activeGradient
     },
     { 
+      name: 'notifications', 
+      icon: 'notifications-outline', 
+      activeIcon: 'notifications', 
+      label: 'Alerts',
+      gradient: activeGradient,
+      badge: 3
+    },
+    { 
+      name: 'messages', 
+      icon: 'mail-outline', 
+      activeIcon: 'mail', 
+      label: 'Messages',
+      gradient: activeGradient,
+      badge: 2
+    },
+    { 
       name: 'profile', 
       icon: 'person-outline', 
       activeIcon: 'person', 
@@ -145,11 +161,18 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                       >
                         <BlurView intensity={10} tint="light" style={styles.activeTabBlur}>
                           <View style={styles.tabContent}>
-                            <Ionicons 
-                              name={tabData.activeIcon as any} 
-                              size={22} 
-                              color="white" 
-                            />
+                            <View style={styles.iconContainer}>
+                              <Ionicons 
+                                name={tabData.activeIcon as any} 
+                                size={22} 
+                                color="white" 
+                              />
+                              {tabData.badge && (
+                                <View style={styles.badge}>
+                                  <Text style={styles.badgeText}>{tabData.badge}</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text style={styles.activeTabLabel}>{tabData.label}</Text>
                             <View style={styles.activeIndicator} />
                           </View>
@@ -158,11 +181,18 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                     ) : (
                       <View style={styles.inactiveTab}>
                         <View style={styles.tabContent}>
-                          <Ionicons 
-                            name={tabData.icon as any} 
-                            size={20} 
-                            color="rgba(255,255,255,0.7)" 
-                          />
+                          <View style={styles.iconContainer}>
+                            <Ionicons 
+                              name={tabData.icon as any} 
+                              size={20} 
+                              color="rgba(255,255,255,0.7)" 
+                            />
+                            {tabData.badge && (
+                              <View style={styles.badge}>
+                                <Text style={styles.badgeText}>{tabData.badge}</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.inactiveTabLabel}>{tabData.label}</Text>
                         </View>
                       </View>
@@ -207,6 +237,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -223,10 +265,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    height: 80, // Reduced from 100
+    height: 85, // Slightly taller for 6 tabs
     backgroundColor: 'transparent',
     justifyContent: 'flex-start',
-    paddingTop: 20, // Reduced from 40
+    paddingTop: 15, // Reduced further
     overflow: 'hidden',
   },
   backgroundGradient: {
@@ -263,8 +305,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     width: '100%',
     paddingBottom: 8,
-    paddingHorizontal: 8,
-    height: 50, // Reduced from 60
+    paddingHorizontal: 4, // Reduced for more space
+    height: 55, // Slightly taller
   },
   tabItem: {
     flex: 1,
@@ -273,14 +315,14 @@ const styles = StyleSheet.create({
   tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48, // Fixed height for consistency
+    height: 52, // Increased height for taller background
     width: '100%',
     borderRadius: 12, // Rounded corners for buttons
   },
   activeTabGradient: {
     borderRadius: 12,
-    height: 40,
-    width: '90%',
+    height: '100%', // Full height
+    width: '100%', // Full width
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3,
@@ -289,7 +331,7 @@ const styles = StyleSheet.create({
   },
   activeTabBlur: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 12, // Match the gradient border radius
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
@@ -299,8 +341,8 @@ const styles = StyleSheet.create({
   inactiveTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    width: '90%',
+    height: '100%', // Full height to match active
+    width: '100%', // Full width to match active
     borderRadius: 12,
     backgroundColor: 'transparent', // Removed background from inactive tabs
   },
@@ -310,9 +352,33 @@ const styles = StyleSheet.create({
     gap: 3,
     position: 'relative',
   },
+  iconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   activeTabLabel: {
     color: 'white',
-    fontSize: 11,
+    fontSize: 9, // Smaller for 6 tabs
     fontWeight: '700',
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.8)',
@@ -321,7 +387,7 @@ const styles = StyleSheet.create({
   },
   inactiveTabLabel: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 10,
+    fontSize: 8, // Smaller for 6 tabs
     fontWeight: '600',
     textAlign: 'center',
   },
