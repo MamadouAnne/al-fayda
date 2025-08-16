@@ -1,5 +1,8 @@
 import { supabase, Post, Comment, Like, Follow, Notification, Message, Chat, User, Story } from './supabase';
 
+// Re-export types for convenience
+export type { User, Post, Comment, Like, Follow, Notification, Message, Chat, Story };
+
 // Posts API
 export const postsApi = {
   // Get all posts with user info and likes
@@ -261,7 +264,7 @@ export const commentsApi = {
 
 // Users API
 export const usersApi = {
-  // Get user profile
+  // Get user profile with real follower counts
   async getUser(userId: string) {
     const { data, error } = await supabase
       .from('user_profiles')
@@ -270,7 +273,24 @@ export const usersApi = {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Get real follower count from follows table
+    const { count: followersCount } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', userId);
+    
+    // Get real following count from follows table
+    const { count: followingCount } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', userId);
+    
+    return {
+      ...data,
+      followers_count: followersCount || 0,
+      following_count: followingCount || 0
+    };
   },
 
   // Alias for getUserProfile to match usage in user profile screen
@@ -327,7 +347,7 @@ export const usersApi = {
   },
 
   // Get followers
-  async getFollowers(userId: string) {
+  async getFollowers(userId: string): Promise<User[]> {
     const { data, error } = await supabase
       .from('follows')
       .select(`
@@ -336,11 +356,11 @@ export const usersApi = {
       .eq('following_id', userId);
 
     if (error) throw error;
-    return data.map(item => item.follower);
+    return (data || []).map((item: any) => item.follower).filter(Boolean);
   },
 
   // Get following
-  async getFollowing(userId: string) {
+  async getFollowing(userId: string): Promise<User[]> {
     const { data, error } = await supabase
       .from('follows')
       .select(`
@@ -349,7 +369,55 @@ export const usersApi = {
       .eq('follower_id', userId);
 
     if (error) throw error;
-    return data.map(item => item.following);
+    return (data || []).map((item: any) => item.following).filter(Boolean);
+  },
+
+  // Check if current user is following a specific user
+  async isFollowing(currentUserId: string, targetUserId: string) {
+    const { data, error } = await supabase
+      .from('follows')
+      .select('id')
+      .eq('follower_id', currentUserId)
+      .eq('following_id', targetUserId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
+    return !!data;
+  },
+
+  // Get suggested users to follow
+  async getSuggestedUsers(currentUserId: string, limit = 20): Promise<User[]> {
+    // Get users that the current user is not following
+    // Prioritize users with more followers (popular users)
+    // Exclude current user
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .neq('id', currentUserId)
+      .order('followers_count', { ascending: false })
+      .limit(limit * 2); // Get more to filter out already followed users
+
+    if (error) throw error;
+
+    // Filter out users the current user is already following
+    const allUsers = data || [];
+    const suggestions: User[] = [];
+    
+    for (const user of allUsers) {
+      if (suggestions.length >= limit) break;
+      
+      try {
+        const isAlreadyFollowing = await this.isFollowing(currentUserId, user.id);
+        if (!isAlreadyFollowing) {
+          suggestions.push(user);
+        }
+      } catch (error) {
+        // If error checking follow status, include the user anyway
+        suggestions.push(user);
+      }
+    }
+
+    return suggestions;
   },
 };
 

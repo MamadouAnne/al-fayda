@@ -5,18 +5,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { usersApi, postsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { profile: currentUser } = useAuth();
   const [selectedTab, setSelectedTab] = useState('posts');
   const [isFollowing, setIsFollowing] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
 
@@ -29,6 +32,17 @@ export default function UserProfileScreen() {
       // Load user profile
       const userData = await usersApi.getUserProfile(id as string);
       setUser(userData);
+      
+      // Check follow status if we're not viewing our own profile
+      if (currentUser && currentUser.id !== id) {
+        try {
+          const isCurrentlyFollowing = await usersApi.isFollowing(currentUser.id, id as string);
+          setIsFollowing(isCurrentlyFollowing);
+        } catch (error) {
+          console.log('Error checking follow status:', error);
+          setIsFollowing(false);
+        }
+      }
       
       // Load user posts
       const posts = await postsApi.getPostsByUser(id as string, 20, 0);
@@ -46,7 +60,7 @@ export default function UserProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, currentUser]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -122,8 +136,22 @@ export default function UserProfileScreen() {
     );
   }
 
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing);
+  const handleFollow = async () => {
+    if (!currentUser || !user || followLoading) return;
+    
+    try {
+      setFollowLoading(true);
+      const result = await usersApi.toggleFollow(user.id);
+      setIsFollowing(result.following);
+      
+      // Refresh user data to get updated follower count from database
+      const updatedUserData = await usersApi.getUserProfile(user.id);
+      setUser(updatedUserData);
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+    } finally {
+      setFollowLoading(false);
+    }
   };
 
   const handleMessage = () => {
@@ -402,41 +430,53 @@ export default function UserProfileScreen() {
               <Text style={styles.statNumber}>{userPosts.length}</Text>
               <Text style={styles.statLabel}>Posts</Text>
             </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{(user.followers || 0).toLocaleString()}</Text>
+            <TouchableOpacity 
+              style={styles.stat}
+              onPress={() => router.push(`/user/${user.id}/follow-tabs?tab=followers`)}
+            >
+              <Text style={styles.statNumber}>{(user.followers_count || 0).toLocaleString()}</Text>
               <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{(user.following || 0).toLocaleString()}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.stat}
+              onPress={() => router.push(`/user/${user.id}/follow-tabs?tab=following`)}
+            >
+              <Text style={styles.statNumber}>{(user.following_count || 0).toLocaleString()}</Text>
               <Text style={styles.statLabel}>Following</Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity onPress={handleFollow} style={styles.followButton}>
-              <LinearGradient
-                colors={isFollowing ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)'] : ['#10B981', '#059669']}
-                style={styles.followButtonGradient}
+          {currentUser && currentUser.id !== user.id && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity 
+                onPress={handleFollow} 
+                style={[styles.followButton, followLoading && styles.followButtonDisabled]}
+                disabled={followLoading}
               >
-                <Ionicons 
-                  name={isFollowing ? "checkmark" : "person-add"} 
-                  size={18} 
-                  color="white" 
-                />
-                <Text style={styles.followButtonText}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={handleMessage} style={styles.messageButton}>
-              <BlurView intensity={20} tint="light" style={styles.messageButtonBlur}>
-                <Ionicons name="chatbubble" size={18} color="white" />
-                <Text style={styles.messageButtonText}>Message</Text>
-              </BlurView>
-            </TouchableOpacity>
-          </View>
+                <LinearGradient
+                  colors={isFollowing ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)'] : ['#10B981', '#059669']}
+                  style={styles.followButtonGradient}
+                >
+                  <Ionicons 
+                    name={followLoading ? "hourglass" : (isFollowing ? "checkmark" : "person-add")} 
+                    size={18} 
+                    color="white" 
+                  />
+                  <Text style={styles.followButtonText}>
+                    {followLoading ? 'Loading...' : (isFollowing ? 'Following' : 'Follow')}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={handleMessage} style={styles.messageButton}>
+                <BlurView intensity={20} tint="light" style={styles.messageButtonBlur}>
+                  <Ionicons name="chatbubble" size={18} color="white" />
+                  <Text style={styles.messageButtonText}>Message</Text>
+                </BlurView>
+              </TouchableOpacity>
+            </View>
+          )}
         </Animated.View>
 
         {/* Tab Navigation */}
@@ -809,6 +849,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  followButtonDisabled: {
+    opacity: 0.6,
   },
   followButtonGradient: {
     flexDirection: 'row',

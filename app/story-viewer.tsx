@@ -18,15 +18,31 @@ const { width, height } = Dimensions.get('window');
 
 export default function StoryViewerScreen() {
   const router = useRouter();
-  const { storyId, userId } = useLocalSearchParams();
+  const { storyId, userId, allUserStories, currentUserIndex } = useLocalSearchParams();
   const [stories, setStories] = useState<any[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [currentUserIdx, setCurrentUserIdx] = useState(0);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [shouldShowLastStory, setShouldShowLastStory] = useState(false);
   const [loading, setLoading] = useState(true);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    loadStoriesForUser();
+    initializeViewer();
+  }, [allUserStories, currentUserIndex]);
+
+  useEffect(() => {
+    if (allUsers.length > 0) {
+      loadStoriesForUser();
+    }
+  }, [currentUserIdx, allUsers]);
+
+  // Fallback effect to load stories even if allUsers setup fails
+  useEffect(() => {
+    if (allUsers.length === 0 && userId) {
+      loadStoriesForUser();
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -36,16 +52,55 @@ export default function StoryViewerScreen() {
     }
   }, [currentStoryIndex, stories]);
 
+  const initializeViewer = () => {
+    try {
+      // Parse all user stories data
+      if (allUserStories && typeof allUserStories === 'string') {
+        const parsedUsers = JSON.parse(allUserStories);
+        setAllUsers(parsedUsers);
+        
+        // Set current user index
+        const userIdx = currentUserIndex ? parseInt(currentUserIndex as string) : 0;
+        setCurrentUserIdx(userIdx);
+      } else {
+        // Fallback: create single user entry
+        setAllUsers([{ userId: userId, storyId: storyId, stories: [] }]);
+        setCurrentUserIdx(0);
+      }
+    } catch (error) {
+      console.error('Error parsing user stories data:', error);
+      // Fallback: create single user entry
+      setAllUsers([{ userId: userId, storyId: storyId, stories: [] }]);
+      setCurrentUserIdx(0);
+    }
+  };
+
   const loadStoriesForUser = async () => {
     try {
       setLoading(true);
-      const userStories = await storiesApi.getStoriesByUser(userId as string);
+      
+      // Get current user ID from allUsers or fallback to userId param
+      const currentUserId = allUsers.length > 0 ? allUsers[currentUserIdx]?.userId : userId;
+      
+      const userStories = await storiesApi.getStoriesByUser(currentUserId as string);
       setStories(userStories);
       
-      // Find the index of the clicked story
-      const clickedStoryIndex = userStories.findIndex(story => story.id === storyId);
-      if (clickedStoryIndex !== -1) {
-        setCurrentStoryIndex(clickedStoryIndex);
+      // Find the index of the clicked story (only for initial load)
+      const initialUserIdx = currentUserIndex ? parseInt(currentUserIndex as string) : 0;
+      if (currentUserIdx === initialUserIdx) {
+        const clickedStoryIndex = userStories.findIndex(story => story.id === storyId);
+        if (clickedStoryIndex !== -1) {
+          setCurrentStoryIndex(clickedStoryIndex);
+        } else {
+          setCurrentStoryIndex(0);
+        }
+      } else if (shouldShowLastStory) {
+        // Going back to previous user, show their last story
+        setCurrentStoryIndex(userStories.length - 1);
+        setShouldShowLastStory(false);
+      } else {
+        // For subsequent users, start from the first story
+        setCurrentStoryIndex(0);
       }
       
       // TODO: Increment views for the current story
@@ -83,7 +138,13 @@ export default function StoryViewerScreen() {
     if (currentStoryIndex < stories.length - 1) {
       setCurrentStoryIndex(currentStoryIndex + 1);
     } else {
-      router.back();
+      // Current user's stories are done, move to next user
+      if (allUsers.length > 0 && currentUserIdx < allUsers.length - 1) {
+        setCurrentUserIdx(currentUserIdx + 1);
+      } else {
+        // No more users, go back to home
+        router.back();
+      }
     }
   };
 
@@ -91,7 +152,14 @@ export default function StoryViewerScreen() {
     if (currentStoryIndex > 0) {
       setCurrentStoryIndex(currentStoryIndex - 1);
     } else {
-      router.back();
+      // At the first story of current user, move to previous user's last story
+      if (allUsers.length > 0 && currentUserIdx > 0) {
+        setShouldShowLastStory(true);
+        setCurrentUserIdx(currentUserIdx - 1);
+      } else {
+        // No previous users, go back to home
+        router.back();
+      }
     }
   };
 
@@ -212,6 +280,24 @@ export default function StoryViewerScreen() {
         <Text style={styles.viewsText}>
           👁 {currentStory.views_count} views
         </Text>
+        <Text style={styles.debugText}>
+          User {currentUserIdx + 1} of {allUsers.length} | Story {currentStoryIndex + 1} of {stories.length}
+        </Text>
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => {
+              console.log('Debug info:', {
+                allUsers,
+                currentUserIdx,
+                allUserStories,
+                currentUserIndex
+              });
+            }}
+          >
+            <Text style={styles.debugButtonText}>Debug</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -355,5 +441,23 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+  },
+  debugText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  debugButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  debugButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

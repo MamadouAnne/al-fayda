@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { postsApi } from '@/lib/api';
+import { postsApi, usersApi } from '@/lib/api';
 // Avatar URLs are stored directly in database - no utility function needed
 
 const { width } = Dimensions.get('window');
@@ -18,6 +18,7 @@ export default function ProfileScreen() {
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [realCounts, setRealCounts] = useState<{followers_count: number, following_count: number} | null>(null);
   
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -25,12 +26,17 @@ export default function ProfileScreen() {
 
   // Avatar sync not needed - following senecom approach with direct URL usage
 
-  const loadUserPosts = useCallback(async () => {
+  const loadUserData = useCallback(async () => {
     if (!currentUser) return;
     
     try {
       setLoading(true);
-      const posts = await postsApi.getPostsByUser(currentUser.id, 20, 0);
+      
+      // Load both posts and real user profile with updated counts
+      const [posts, userProfile] = await Promise.all([
+        postsApi.getPostsByUser(currentUser.id, 20, 0),
+        usersApi.getUserProfile(currentUser.id)
+      ]);
       
       const transformedPosts = Array.isArray(posts) ? posts.map(post => ({
         id: post?.id || '',
@@ -41,8 +47,16 @@ export default function ProfileScreen() {
       })) : [];
       
       setUserPosts(transformedPosts);
+      
+      // Set the real counts from the API
+      if (userProfile) {
+        setRealCounts({
+          followers_count: userProfile.followers_count || 0,
+          following_count: userProfile.following_count || 0
+        });
+      }
     } catch (error) {
-      console.error('Error loading user posts:', error);
+      console.error('Error loading user data:', error);
       setUserPosts([]);
     } finally {
       setLoading(false);
@@ -51,13 +65,13 @@ export default function ProfileScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadUserPosts();
+    await loadUserData();
     setRefreshing(false);
-  }, [loadUserPosts]);
+  }, [loadUserData]);
 
   useEffect(() => {
     if (currentUser) {
-      loadUserPosts();
+      loadUserData();
     }
     
     Animated.timing(fadeAnimation, {
@@ -65,7 +79,7 @@ export default function ProfileScreen() {
       duration: 800,
       useNativeDriver: true,
     }).start();
-  }, [currentUser, loadUserPosts]);
+  }, [currentUser, loadUserData]);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,12 +95,12 @@ export default function ProfileScreen() {
         
         lastRefreshTime.current = now;
         console.log('Profile screen focused - refreshing data');
-        console.log('🔍 Current user avatar before refresh:', currentUser.avatar);
+        console.log(' Current user avatar before refresh:', currentUser.avatar);
         
         try {
           await refreshProfile();
-          await loadUserPosts();
-          console.log('🔍 Current user avatar after refresh:', currentUser.avatar);
+          await loadUserData();
+          console.log(' Current user avatar after refresh:', currentUser.avatar);
         } catch (error) {
           console.error('Error refreshing data on focus:', error);
         }
@@ -402,15 +416,21 @@ export default function ProfileScreen() {
                 
                 <View style={styles.statDivider} />
                 
-                <TouchableOpacity style={styles.statCard}>
-                  <Text style={styles.statNumber}>{currentUser.followers_count?.toLocaleString() || '0'}</Text>
+                <TouchableOpacity 
+                  style={styles.statCard}
+                  onPress={() => router.push(`/user/${currentUser.id}/follow-tabs?tab=followers`)}
+                >
+                  <Text style={styles.statNumber}>{(realCounts?.followers_count ?? currentUser.followers_count ?? 0).toLocaleString()}</Text>
                   <Text style={styles.statLabel}>Followers</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.statDivider} />
                 
-                <TouchableOpacity style={styles.statCard}>
-                  <Text style={styles.statNumber}>{currentUser.following_count?.toLocaleString() || '0'}</Text>
+                <TouchableOpacity 
+                  style={styles.statCard}
+                  onPress={() => router.push(`/user/${currentUser.id}/follow-tabs?tab=following`)}
+                >
+                  <Text style={styles.statNumber}>{(realCounts?.following_count ?? currentUser.following_count ?? 0).toLocaleString()}</Text>
                   <Text style={styles.statLabel}>Following</Text>
                 </TouchableOpacity>
               </View>
@@ -502,6 +522,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  scrollView: {
+    flex: 1,
+  },
   header: {
     position: 'absolute',
     top: 0,
@@ -561,9 +584,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
-  scrollView: {
-    flex: 1,
-  },
   profileSection: {
     paddingTop: 120,
     paddingHorizontal: 20,
@@ -583,56 +603,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 16,
-  },
-  avatarWrapper: {
-    position: 'relative',
-  },
-  avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-  },
-  defaultAvatar: {
-    backgroundColor: '#667eea',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initialsText: {
-    color: 'white',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#1DA1F2',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
   userInfo: {
     flex: 1,
@@ -866,5 +836,54 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: '600',
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarWrapper: {
+    marginRight: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatar: {
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+  },
+  defaultAvatar: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#4ECDC4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
   },
 });

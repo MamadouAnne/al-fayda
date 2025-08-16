@@ -244,7 +244,13 @@ export default function HomeScreen() {
                   params: { 
                     storyId: storyGroup.id,
                     userId: storyGroup.user_id,
-                    userStories: JSON.stringify(storyGroup.stories.map((s: any) => s.id))
+                    userStories: JSON.stringify(storyGroup.stories.map((s: any) => s.id)),
+                    allUserStories: JSON.stringify(groupedStories.map((g: any) => ({
+                      userId: g.user_id,
+                      storyId: g.id,
+                      stories: g.stories.map((s: any) => s.id)
+                    }))),
+                    currentUserIndex: index.toString()
                   }
                 });
               }}

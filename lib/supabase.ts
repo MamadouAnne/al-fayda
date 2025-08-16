@@ -38,6 +38,7 @@ export interface User {
   posts_count: number;
   created_at: string;
   updated_at: string;
+  hasStory?: boolean;
 }
 
 export interface Post {
