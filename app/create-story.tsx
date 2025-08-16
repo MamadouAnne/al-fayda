@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { storiesApi } from '@/lib/api';
+import { uploadMediaToStorage } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -124,9 +125,19 @@ export default function CreateStoryScreen() {
       const mediaType = mediaUri.toLowerCase().includes('.mp4') || 
                        mediaUri.toLowerCase().includes('.mov') ? 'video' : 'image';
       
-      // Create the story using the API
+      // Upload media to Supabase storage first
+      console.log('📤 Uploading story media to storage...');
+      const uploadedMediaUrl = await uploadMediaToStorage(mediaUri, 'stories');
+      
+      if (!uploadedMediaUrl) {
+        throw new Error('Failed to upload media to storage');
+      }
+      
+      console.log('✅ Story media uploaded:', uploadedMediaUrl);
+      
+      // Create the story using the API with uploaded media URL
       const newStory = await storiesApi.createStory(
-        mediaUri,
+        uploadedMediaUrl,
         mediaType,
         caption || undefined
       );

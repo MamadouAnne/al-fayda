@@ -7,7 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { postsApi, storiesApi, subscriptions } from '@/lib/api';
-import { getAvatarUrl } from '@/lib/supabase';
+import { getAvatarUrl, getPostImageUrls, getStoryMediaUrl } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,6 +28,11 @@ export default function HomeScreen() {
     try {
       setLoading(true);
       const data = await postsApi.getPosts(20, 0);
+      console.log('🔍 Raw posts data:', data);
+      console.log('📊 Number of posts fetched:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('👥 Users in posts:', data.map(p => ({ id: p.user?.id, name: p.user?.name })));
+      }
       
       // Transform the data to match the expected format
       const transformedPosts = data.map(post => ({
@@ -40,7 +45,7 @@ export default function HomeScreen() {
           verified: post.user.verified || false,
           location: post.location
         },
-        images: post.images || [],
+        images: getPostImageUrls(post.images) || [],
         caption: post.content,
         likes: post.likes?.length || 0,
         timestamp: new Date(post.created_at).toLocaleString('en-US', {
@@ -59,6 +64,11 @@ export default function HomeScreen() {
       
       // Load stories
       const storiesData = await storiesApi.getStories();
+      console.log('📸 Raw stories data:', storiesData);
+      console.log('📊 Number of stories fetched:', storiesData?.length || 0);
+      if (storiesData && storiesData.length > 0) {
+        console.log('👥 Users in stories:', storiesData.map(s => ({ id: s.user?.id, name: s.user?.name })));
+      }
       setStories(storiesData);
       
       // Group stories by user
@@ -274,7 +284,7 @@ export default function HomeScreen() {
                 >
                   <View style={styles.storyImageWrapper}>
                     <Image 
-                      source={{ uri: storyGroup.media_url }} 
+                      source={{ uri: getStoryMediaUrl(storyGroup.media_url) || storyGroup.media_url }} 
                       style={styles.storyCircularImage} 
                     />
                   </View>

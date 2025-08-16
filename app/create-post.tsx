@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { postsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { uploadMedia, testStorageSetup } from '@/lib/supabase';
 const { width } = Dimensions.get('window');
 
 interface MediaItem {
@@ -196,13 +197,28 @@ export default function CreatePostScreen() {
       // Extract hashtags from caption
       const hashtags = caption.match(/#\w+/g) || [];
       
-      // Convert media URIs to images array (in a real app, you'd upload these to storage first)
-      const images = mediaItems.map(item => item.uri);
+      // Upload images to Supabase storage first
+      const imageUris = mediaItems.map(item => item.uri);
+      let uploadedImageUrls: string[] = [];
       
-      // Create the post using the API
+      if (imageUris.length > 0) {
+        console.log('📤 Uploading images to storage...');
+        
+        // Test storage setup first
+        await testStorageSetup();
+        
+        uploadedImageUrls = await uploadMedia(imageUris, 'posts');
+        console.log('✅ Images uploaded:', uploadedImageUrls);
+        
+        if (uploadedImageUrls.length === 0) {
+          throw new Error('Failed to upload any images');
+        }
+      }
+      
+      // Create the post using the API with uploaded image URLs
       const newPost = await postsApi.createPost(
         caption,
-        images.length > 0 ? images : undefined,
+        uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined,
         location || undefined,
         hashtags.length > 0 ? hashtags : undefined
       );

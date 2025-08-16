@@ -39,6 +39,10 @@ export default function PostCard({ post, index = 0 }: PostCardProps) {
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
 
+  // Debug log to see what images we're receiving
+  console.log('🃏 PostCard received - Post ID:', post.id, 'Images:', post.images);
+  console.log('📊 Image count:', post.images.length);
+
   const handleLike = () => {
     Animated.sequence([
       Animated.timing(likeAnimation, {
@@ -114,42 +118,53 @@ export default function PostCard({ post, index = 0 }: PostCardProps) {
       </View>
 
       {/* Post Images */}
-      <TouchableOpacity onPress={handlePostPress} style={styles.imageSection}>
-        <ScrollView 
-          horizontal 
-          pagingEnabled 
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 32));
-            setCurrentImageIndex(newIndex);
-          }}
-          style={styles.imageScrollView}
-          scrollEnabled={post.images.length > 1}
-        >
-          {post.images.map((imageUrl, imgIndex) => (
-            <Image 
-              key={imgIndex}
-              source={{ uri: imageUrl }} 
-              style={styles.postImage}
-            />
-          ))}
-        </ScrollView>
-        
-        {/* Image indicators */}
-        {post.images.length > 1 && (
-          <View style={styles.indicatorContainer}>
-            {post.images.map((_, imgIndex) => (
-              <View 
-                key={imgIndex}
-                style={[
-                  styles.indicator,
-                  { backgroundColor: imgIndex === currentImageIndex ? '#3B82F6' : '#D1D5DB' }
-                ]}
-              />
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
+      {post.images && post.images.length > 0 ? (
+        <TouchableOpacity onPress={handlePostPress} style={styles.imageSection}>
+          <ScrollView 
+            horizontal 
+            pagingEnabled 
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(event) => {
+              const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 32));
+              setCurrentImageIndex(newIndex);
+            }}
+            style={styles.imageScrollView}
+            scrollEnabled={post.images.length > 1}
+          >
+            {post.images.map((imageUrl, imgIndex) => {
+              console.log(`🖼️ Rendering image ${imgIndex}:`, imageUrl);
+              return (
+                <Image 
+                  key={imgIndex}
+                  source={{ uri: imageUrl }} 
+                  style={styles.postImage}
+                  onError={(error) => console.error('❌ Image failed to load:', imageUrl, error)}
+                  onLoad={() => console.log('✅ Image loaded successfully:', imageUrl)}
+                />
+              );
+            })}
+          </ScrollView>
+          
+          {/* Image indicators */}
+          {post.images.length > 1 && (
+            <View style={styles.indicatorContainer}>
+              {post.images.map((_, imgIndex) => (
+                <View 
+                  key={imgIndex}
+                  style={[
+                    styles.indicator,
+                    { backgroundColor: imgIndex === currentImageIndex ? '#3B82F6' : '#D1D5DB' }
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.noImageContainer}>
+          <Text style={styles.noImageText}>No images to display</Text>
+        </View>
+      )}
 
       {/* Post Actions */}
       <View style={styles.actionsRow}>
@@ -441,5 +456,18 @@ const styles = StyleSheet.create({
   },
   commentAuthor: {
     fontWeight: '600',
+  },
+  noImageContainer: {
+    height: 200,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    borderRadius: 16,
+  },
+  noImageText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });
