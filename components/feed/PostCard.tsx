@@ -48,6 +48,7 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
   const [videoPlayCounts, setVideoPlayCounts] = useState<{ [key: number]: number }>({});
   const [manualPlayStates, setManualPlayStates] = useState<{ [key: number]: boolean }>({});
   const [showControls, setShowControls] = useState<{ [key: number]: boolean }>({});
+  const [playingStates, setPlayingStates] = useState<{ [key: number]: boolean }>({});
   const videoRefs = useRef<{ [key: number]: Video | null }>({});
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
@@ -275,32 +276,40 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
                       onError={(error) => console.error('❌ Video failed to load:', mediaUrl, error)}
                       onLoad={() => console.log('✅ Video loaded successfully:', mediaUrl)}
                       onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-                        if (status.isLoaded && status.didJustFinish && imgIndex === currentImageIndex && isVisible) {
-                          const currentPlayCount = videoPlayCounts[imgIndex] || 0;
-                          const isManualPlay = manualPlayStates[imgIndex];
-                          const newPlayCount = currentPlayCount + 1;
-                          
-                          console.log(`📹 Video ${imgIndex} finished play ${newPlayCount}, manual: ${isManualPlay}`);
-                          
-                          // Increment play count
-                          setVideoPlayCounts(prev => ({
+                        if (status.isLoaded) {
+                          // Update playing state
+                          setPlayingStates(prev => ({
                             ...prev,
-                            [imgIndex]: newPlayCount
+                            [imgIndex]: status.isPlaying
                           }));
                           
-                          const video = videoRefs.current[imgIndex];
-                          if (video && !isManualPlay) {
-                            // Only restart if we haven't reached limit (3 times)
-                            if (newPlayCount < 3) {
-                              setTimeout(() => {
-                                video.replayAsync().then(() => {
-                                  video.setVolumeAsync(1.0);
-                                  console.log(`🔄 Video auto-playing ${newPlayCount + 1}/3`);
-                                });
-                              }, 200);
-                            } else {
-                              video.pauseAsync();
-                              console.log('🛑 Video finished 3 auto-plays, stopping');
+                          if (status.didJustFinish && imgIndex === currentImageIndex && isVisible) {
+                            const currentPlayCount = videoPlayCounts[imgIndex] || 0;
+                            const isManualPlay = manualPlayStates[imgIndex];
+                            const newPlayCount = currentPlayCount + 1;
+                            
+                            console.log(`📹 Video ${imgIndex} finished play ${newPlayCount}, manual: ${isManualPlay}`);
+                            
+                            // Increment play count
+                            setVideoPlayCounts(prev => ({
+                              ...prev,
+                              [imgIndex]: newPlayCount
+                            }));
+                            
+                            const video = videoRefs.current[imgIndex];
+                            if (video && !isManualPlay) {
+                              // Only restart if we haven't reached limit (3 times)
+                              if (newPlayCount < 3) {
+                                setTimeout(() => {
+                                  video.replayAsync().then(() => {
+                                    video.setVolumeAsync(1.0);
+                                    console.log(`🔄 Video auto-playing ${newPlayCount + 1}/3`);
+                                  });
+                                }, 200);
+                              } else {
+                                video.pauseAsync();
+                                console.log('🛑 Video finished 3 auto-plays, stopping');
+                              }
                             }
                           }
                         }
@@ -315,19 +324,36 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
                           onPress={() => {
                             const video = videoRefs.current[imgIndex];
                             if (video) {
-                              video.getStatusAsync().then((status) => {
-                                if (status.isLoaded) {
-                                  if (status.isPlaying) {
-                                    video.pauseAsync();
-                                  } else {
-                                    video.playAsync();
-                                  }
-                                }
-                              });
+                              const isPlaying = playingStates[imgIndex];
+                              if (isPlaying) {
+                                video.pauseAsync();
+                                console.log('⏸️ Video paused manually');
+                              } else {
+                                video.playAsync();
+                                console.log('▶️ Video played manually');
+                              }
                             }
                           }}
                         >
-                          <Ionicons name="play-circle" size={60} color="rgba(255,255,255,0.8)" />
+                          <Ionicons 
+                            name={playingStates[imgIndex] ? "pause-circle" : "play-circle"} 
+                            size={60} 
+                            color="white" 
+                          />
+                        </TouchableOpacity>
+                        
+                        {/* Close controls button */}
+                        <TouchableOpacity 
+                          style={styles.closeControlsButton}
+                          onPress={() => {
+                            setShowControls(prev => ({
+                              ...prev,
+                              [imgIndex]: false
+                            }));
+                            console.log('❌ Video controls hidden');
+                          }}
+                        >
+                          <Ionicons name="close-circle" size={30} color="white" />
                         </TouchableOpacity>
                       </View>
                     )}
@@ -342,7 +368,7 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
                             ...prev,
                             [imgIndex]: true
                           }));
-                          console.log('🎮 Video controls shown');
+                          console.log('🎮 Video controls shown for video', imgIndex);
                         }}
                       />
                     )}
@@ -749,7 +775,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    zIndex: 10,
+    zIndex: 20,
   },
   videoIndicator: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -781,10 +807,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    zIndex: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 15,
   },
   playPauseButton: {
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+  closeControlsButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    padding: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
 });

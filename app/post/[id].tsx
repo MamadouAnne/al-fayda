@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +9,13 @@ import { postsApi, commentsApi } from '@/lib/api';
 import { Post, Comment, User } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
+
+// Helper function to check if URL is a video
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
+  const lowerUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
+};
 
 // Move styles to the top level to avoid hoisting issues
 const styles = StyleSheet.create({
@@ -637,6 +645,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   
+  // Video Styles
+  videoContainer: {
+    position: 'relative',
+  },
+  videoTapArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    backgroundColor: 'transparent',
+  },
+  customControls: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 15,
+  },
+  playPauseButton: {
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+  closeControlsButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    padding: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+
   // Comment Input Styles
   commentInputContainer: {
     position: 'absolute',
@@ -753,6 +803,9 @@ export default function PostDetailScreen() {
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showControls, setShowControls] = useState<{ [key: number]: boolean }>({});
+  const [playingStates, setPlayingStates] = useState<{ [key: number]: boolean }>({});
+  const videoRefs = useRef<{ [key: number]: Video | null }>({});
 
   // Initialize animation refs with proper types
   const fadeAnimation = useRef<Animated.Value>(new Animated.Value(0)).current;
@@ -892,6 +945,27 @@ export default function PostDetailScreen() {
     };
   }, []);
 
+  // Auto-hide video controls after 3 seconds
+  useEffect(() => {
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    
+    Object.entries(showControls).forEach(([indexStr, isVisible]) => {
+      if (isVisible) {
+        const timeout = setTimeout(() => {
+          setShowControls(prev => ({
+            ...prev,
+            [parseInt(indexStr)]: false
+          }));
+        }, 3000);
+        timeouts.push(timeout);
+      }
+    });
+
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
+  }, [showControls]);
+
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -8],
@@ -900,13 +974,98 @@ export default function PostDetailScreen() {
   const renderImageItem = useCallback(({ item, index }: { item: string; index: number }) => {
     if (!item) return null;
     
+    const isVideo = isVideoUrl(item);
+    
     return (
       <View style={styles.imageContainer}>
-        <Image 
-          source={{ uri: item }} 
-          style={styles.postImage} 
-          resizeMode="cover"
-        />
+        {isVideo ? (
+          <View style={styles.videoContainer}>
+            <Video
+              ref={(ref) => {
+                videoRefs.current[index] = ref;
+              }}
+              source={{ uri: item }}
+              style={styles.postImage}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={index === currentImageIndex}
+              isLooping={false}
+              isMuted={false}
+              volume={1.0}
+              useNativeControls={false}
+              onError={(error) => console.error('❌ Video failed to load:', item, error)}
+              onLoad={() => console.log('✅ Video loaded successfully:', item)}
+              onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+                if (status.isLoaded) {
+                  setPlayingStates(prev => ({
+                    ...prev,
+                    [index]: status.isPlaying
+                  }));
+                }
+              }}
+            />
+            
+            {/* Custom video controls overlay */}
+            {showControls[index] && (
+              <View style={styles.customControls}>
+                <TouchableOpacity 
+                  style={styles.playPauseButton}
+                  onPress={() => {
+                    const video = videoRefs.current[index];
+                    if (video) {
+                      const isPlaying = playingStates[index];
+                      if (isPlaying) {
+                        video.pauseAsync();
+                        console.log('⏸️ Video paused manually');
+                      } else {
+                        video.playAsync();
+                        console.log('▶️ Video played manually');
+                      }
+                    }
+                  }}
+                >
+                  <Ionicons 
+                    name={playingStates[index] ? "pause-circle" : "play-circle"} 
+                    size={60} 
+                    color="white" 
+                  />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.closeControlsButton}
+                  onPress={() => {
+                    setShowControls(prev => ({
+                      ...prev,
+                      [index]: false
+                    }));
+                  }}
+                >
+                  <Ionicons name="close-circle" size={30} color="white" />
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            {/* Tap area to show controls */}
+            {!showControls[index] && (
+              <TouchableOpacity 
+                style={styles.videoTapArea}
+                activeOpacity={1}
+                onPress={() => {
+                  setShowControls(prev => ({
+                    ...prev,
+                    [index]: true
+                  }));
+                }}
+              />
+            )}
+          </View>
+        ) : (
+          <Image 
+            source={{ uri: item }} 
+            style={styles.postImage} 
+            resizeMode="cover"
+          />
+        )}
+        
         {postImages.length > 1 && (
           <View style={styles.imageCounter}>
             <BlurView intensity={15} tint="dark" style={styles.counterBlur}>
@@ -918,7 +1077,7 @@ export default function PostDetailScreen() {
         )}
       </View>
     );
-  }, [postImages.length]);
+  }, [postImages.length, currentImageIndex, showControls, playingStates]);
 
 
   if (!safePostId) {
