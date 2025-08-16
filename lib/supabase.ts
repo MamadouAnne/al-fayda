@@ -175,7 +175,12 @@ export const getStoryMediaUrl = (mediaPath: string | null | undefined): string |
   }
   
   // If it contains local device paths, skip it
-  if (mediaPath.includes('/data/user/') || mediaPath.includes('/cache/') || mediaPath.includes('ExperienceData')) {
+  if (mediaPath.includes('/data/user/') || 
+      mediaPath.includes('/cache/') || 
+      mediaPath.includes('ExperienceData') ||
+      mediaPath.includes('ImagePicker') ||
+      mediaPath.includes('%25') || // URL encoded characters
+      mediaPath.includes('host.exp.exponent')) {
     console.log('❌ Local device path detected, skipping:', mediaPath);
     return null;
   }
@@ -223,7 +228,12 @@ export const getPostImageUrls = (imagePaths: string[] | null | undefined): strin
     }
     
     // If it contains local device paths, skip it
-    if (imagePath.includes('/data/user/') || imagePath.includes('/cache/') || imagePath.includes('ExperienceData')) {
+    if (imagePath.includes('/data/user/') || 
+        imagePath.includes('/cache/') || 
+        imagePath.includes('ExperienceData') ||
+        imagePath.includes('ImagePicker') ||
+        imagePath.includes('%25') || // URL encoded characters
+        imagePath.includes('host.exp.exponent')) {
       console.log('❌ Local device path detected, skipping:', imagePath);
       return '';
     }

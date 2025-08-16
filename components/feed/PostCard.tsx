@@ -1,9 +1,17 @@
 import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Animated, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
 
 const { width } = Dimensions.get('window');
+
+// Helper function to check if URL is a video
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
+  const lowerUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
+};
 
 interface Post {
   id: number;
@@ -29,19 +37,110 @@ interface Post {
 interface PostCardProps {
   post: Post;
   index?: number;
+  isVisible?: boolean;
 }
 
-export default function PostCard({ post, index = 0 }: PostCardProps) {
+export default function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [manualPlayStates, setManualPlayStates] = useState<{ [key: number]: boolean }>({});
+  const videoRefs = useRef<{ [key: number]: Video | null }>({});
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
 
   // Debug log to see what images we're receiving
   console.log('🃏 PostCard received - Post ID:', post.id, 'Images:', post.images);
   console.log('📊 Image count:', post.images.length);
+
+  // Effect to configure audio session for video playback with sound
+  useEffect(() => {
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          playsInSilentModeIOS: true, // This allows video to play sound even in silent mode
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        });
+        console.log('✅ Audio session configured for video playback');
+      } catch (error) {
+        console.error('❌ Error configuring audio session:', error);
+      }
+    };
+
+    configureAudio();
+  }, []);
+
+  // Effect to pause all videos when component unmounts or goes out of view
+  useEffect(() => {
+    return () => {
+      // Cleanup: pause all videos when component unmounts
+      Object.values(videoRefs.current).forEach(video => {
+        if (video) {
+          video.pauseAsync().catch(() => {});
+        }
+      });
+    };
+  }, []);
+
+  // Effect to handle video playback based on visibility and current media
+  useEffect(() => {
+    // Always pause all videos first when post is not visible
+    if (!isVisible) {
+      console.log('📱 Post not visible, pausing all videos');
+      Object.values(videoRefs.current).forEach(video => {
+        if (video) {
+          video.pauseAsync().catch(err => {
+            console.log('Video pause error:', err.message);
+          });
+        }
+      });
+      return;
+    }
+
+    // Pause videos that are not currently visible
+    Object.entries(videoRefs.current).forEach(([indexStr, video]) => {
+      const index = parseInt(indexStr);
+      if (video && index !== currentImageIndex) {
+        video.pauseAsync().catch(err => {
+          console.log('Video pause error:', err.message);
+        });
+      }
+    });
+
+    const currentVideo = videoRefs.current[currentImageIndex];
+    const currentMediaUrl = post.images[currentImageIndex];
+    const isCurrentMediaVideo = currentMediaUrl && isVideoUrl(currentMediaUrl);
+
+    if (currentVideo && isCurrentMediaVideo) {
+      const isManualPlay = manualPlayStates[currentImageIndex];
+      
+      console.log(`🎬 Video ${currentImageIndex} - Manual: ${isManualPlay}, Visible: ${isVisible}`);
+      
+      // Auto-play videos when they become visible (remove the 2-play limit)
+      if (!isManualPlay) {
+        currentVideo.setPositionAsync(0).then(() => {
+          currentVideo.playAsync().then(() => {
+            currentVideo.setVolumeAsync(1.0);
+            console.log(`✅ Video auto-playing`);
+          }).catch(err => {
+            console.log('Video play error (expected on first load):', err.message);
+          });
+        });
+      } else {
+        // If user manually played, allow it to continue
+        currentVideo.playAsync().then(() => {
+          currentVideo.setVolumeAsync(1.0);
+          console.log('✅ Video manually playing with sound enabled');
+        }).catch(err => {
+          console.log('Video play error:', err.message);
+        });
+      }
+    }
+  }, [currentImageIndex, post.images, manualPlayStates, isVisible]);
 
   const handleLike = () => {
     Animated.sequence([
@@ -131,17 +230,68 @@ export default function PostCard({ post, index = 0 }: PostCardProps) {
             style={styles.imageScrollView}
             scrollEnabled={post.images.length > 1}
           >
-            {post.images.map((imageUrl, imgIndex) => {
-              console.log(`🖼️ Rendering image ${imgIndex}:`, imageUrl);
-              return (
-                <Image 
-                  key={imgIndex}
-                  source={{ uri: imageUrl }} 
-                  style={styles.postImage}
-                  onError={(error) => console.error('❌ Image failed to load:', imageUrl, error)}
-                  onLoad={() => console.log('✅ Image loaded successfully:', imageUrl)}
-                />
-              );
+            {post.images.map((mediaUrl, imgIndex) => {
+              const isVideo = isVideoUrl(mediaUrl);
+              console.log(`🖼️ Rendering ${isVideo ? 'video' : 'image'} ${imgIndex}:`, mediaUrl);
+              
+              if (isVideo) {
+                return (
+                  <Video
+                    key={imgIndex}
+                    ref={(ref) => {
+                      videoRefs.current[imgIndex] = ref;
+                    }}
+                    source={{ uri: mediaUrl }}
+                    style={styles.postImage}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay={isVisible && imgIndex === currentImageIndex}
+                    isLooping={true}
+                    isMuted={false}
+                    volume={1.0}
+                    useNativeControls={false}
+                    onError={(error) => console.error('❌ Video failed to load:', mediaUrl, error)}
+                    onLoad={() => console.log('✅ Video loaded successfully:', mediaUrl)}
+                    onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+                      if (status.isLoaded && status.didJustFinish && imgIndex === currentImageIndex && isVisible) {
+                        console.log(`📹 Video ${imgIndex} finished playing, looping...`);
+                      }
+                    }}
+                  >
+                    {/* Video overlay indicator and manual play button */}
+                    <TouchableOpacity 
+                      style={styles.videoOverlay}
+                      onPress={() => {
+                        const video = videoRefs.current[imgIndex];
+                        if (video) {
+                          setManualPlayStates(prev => ({
+                            ...prev,
+                            [imgIndex]: !prev[imgIndex]
+                          }));
+                          console.log('🎮 Video manual control toggled');
+                        }
+                      }}
+                    >
+                      <View style={styles.videoIndicator}>
+                        <Ionicons 
+                          name="volume-high"
+                          size={20} 
+                          color="white" 
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  </Video>
+                );
+              } else {
+                return (
+                  <Image 
+                    key={imgIndex}
+                    source={{ uri: mediaUrl }} 
+                    style={styles.postImage}
+                    onError={(error) => console.error('❌ Image failed to load:', mediaUrl, error)}
+                    onLoad={() => console.log('✅ Image loaded successfully:', mediaUrl)}
+                  />
+                );
+              }
             })}
           </ScrollView>
           
@@ -469,5 +619,18 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+  },
+  videoIndicator: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

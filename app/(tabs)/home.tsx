@@ -19,6 +19,7 @@ export default function HomeScreen() {
   const [groupedStories, setGroupedStories] = useState<any[]>([]);
   const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [visiblePosts, setVisiblePosts] = useState<Set<string>>(new Set());
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const router = useRouter();
@@ -153,6 +154,20 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, [loadPosts]);
+
+  // Handle viewable items change for video pause/play
+  const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    const newVisiblePosts = new Set<string>(
+      viewableItems.map((item: any) => item.item.id.toString())
+    );
+    setVisiblePosts(newVisiblePosts);
+    console.log('📱 Visible posts:', Array.from(newVisiblePosts));
+  }, []);
+
+  // Viewability config for FlatList
+  const viewabilityConfig = useRef({
+    viewAreaCoveragePercentThreshold: 50, // Post is visible when 50% is shown
+  }).current;
 
   const headerScale = scrollY.interpolate({
     inputRange: [0, 50],
@@ -331,12 +346,20 @@ export default function HomeScreen() {
       <Animated.FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item, index }) => <PostCard post={item} index={index} />}
+        renderItem={({ item, index }) => (
+          <PostCard 
+            post={item} 
+            index={index} 
+            isVisible={visiblePosts.has(item.id.toString())}
+          />
+        )}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
