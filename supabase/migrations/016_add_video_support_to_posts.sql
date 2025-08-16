@@ -11,6 +11,7 @@ SET
     'image/webp', 
     'image/gif',
     'video/mp4',
+    
     'video/quicktime',
     'video/webm',
     'video/avi'

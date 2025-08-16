@@ -9,6 +9,13 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
+// Helper function to check if URL is a video
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
+  const lowerUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
+};
+
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -50,7 +57,8 @@ export default function UserProfileScreen() {
         id: post?.id || '',
         images: post?.images || [],
         likes: post?.likes_count || 0,
-        comments: post?.comments_count || 0
+        comments: post?.comments_count || 0,
+        isVideo: post?.images?.[0] ? isVideoUrl(post.images[0]) : false
       })) : [];
       
       setUserPosts(transformedPosts);
@@ -188,6 +196,13 @@ export default function UserProfileScreen() {
                 onPress={() => router.push(`/post/${post.id}`)}
               >
                 <Image source={{ uri: post.images[0] }} style={styles.postGridImage} />
+                {/* Video indicator */}
+                {post.isVideo && (
+                  <View style={styles.videoIndicator}>
+                    <Ionicons name="play-circle" size={24} color="white" />
+                  </View>
+                )}
+                {/* Multiple images indicator */}
                 {post.images.length > 1 && (
                   <View style={styles.multipleImagesIndicator}>
                     <Ionicons name="copy" size={16} color="white" />
@@ -965,6 +980,20 @@ const styles = StyleSheet.create({
   postGridImage: {
     width: '100%',
     height: '100%',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 5,
   },
   multipleImagesIndicator: {
     position: 'absolute',

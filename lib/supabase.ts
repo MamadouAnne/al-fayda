@@ -259,7 +259,7 @@ export const getPostImageUrls = (imagePaths: string[] | null | undefined): strin
 const ensureBucketExists = async (bucketName: string): Promise<boolean> => {
   try {
     // Try to list files in the bucket to check if it exists
-    const { data, error } = await supabase.storage.from(bucketName).list('', { limit: 1 });
+    const { error } = await supabase.storage.from(bucketName).list('', { limit: 1 });
     
     if (error) {
       console.log(`⚠️ Bucket '${bucketName}' might not exist:`, error.message);
@@ -278,7 +278,8 @@ const ensureBucketExists = async (bucketName: string): Promise<boolean> => {
 export const uploadMediaToStorage = async (
   mediaUri: string, 
   bucket: string, 
-  fileName?: string
+  fileName?: string,
+  onProgress?: (progress: number) => void
 ): Promise<string | null> => {
   try {
     console.log('📤 Uploading media to storage:', mediaUri, 'to bucket:', bucket);
@@ -353,20 +354,54 @@ export const uploadMediaToStorage = async (
     
     console.log('📝 Generated filename:', finalFileName, 'MIME type:', mimeType);
     
-    // Use ArrayBuffer approach for React Native
-    console.log('📖 Reading file as ArrayBuffer...');
+    // Use different approaches based on file size to avoid string length limits
+    console.log('📖 Reading file...');
+    onProgress?.(10); // 10% - started reading file
+    
     const response = await fetch(mediaUri);
     if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
+      throw new Error(`Failed to fetch media: ${response.statusText}`);
     }
     
-    const arrayBuffer = await response.arrayBuffer();
-    console.log('📊 File loaded as ArrayBuffer, size:', arrayBuffer.byteLength, 'bytes');
+    // Get content length to check file size
+    const contentLength = response.headers.get('content-length');
+    const fileSize = contentLength ? parseInt(contentLength) : 0;
+    console.log('📊 File size:', fileSize, 'bytes');
     
-    // Convert ArrayBuffer to Uint8Array for Supabase
-    const fileData = new Uint8Array(arrayBuffer);
+    onProgress?.(20); // 20% - file info retrieved
+    
+    // For large files (over 50MB), use blob approach to avoid string length limits
+    const maxSafeSize = 50 * 1024 * 1024; // 50MB
+    let fileData: Uint8Array;
+    
+    if (fileSize > maxSafeSize || isVideo) {
+      console.log('📦 Using blob approach for large file or video...');
+      onProgress?.(30); // 30% - starting blob conversion
+      
+      const blob = await response.blob();
+      onProgress?.(50); // 50% - blob created
+      
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          onProgress?.(70); // 70% - file read complete
+          resolve(reader.result as ArrayBuffer);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+      });
+      fileData = new Uint8Array(arrayBuffer);
+    } else {
+      console.log('📦 Using ArrayBuffer approach for smaller file...');
+      onProgress?.(50); // 50% - starting array buffer conversion
+      const arrayBuffer = await response.arrayBuffer();
+      onProgress?.(70); // 70% - file read complete
+      fileData = new Uint8Array(arrayBuffer);
+    }
     
     // Upload to Supabase storage
+    onProgress?.(80); // 80% - starting upload
+    
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(finalFileName, fileData, {
@@ -392,6 +427,7 @@ export const uploadMediaToStorage = async (
       return null;
     }
     
+    onProgress?.(90); // 90% - upload complete, getting URL
     console.log('✅ Upload successful:', data);
     
     // Get the public URL
@@ -399,11 +435,18 @@ export const uploadMediaToStorage = async (
       .from(bucket)
       .getPublicUrl(data.path);
     
-    console.log('✅ Image uploaded successfully:', publicUrl);
+    onProgress?.(100); // 100% - completely done
+    console.log('✅ Media uploaded successfully:', publicUrl);
     return publicUrl;
     
   } catch (error) {
-    console.error('❌ Error uploading image:', error);
+    console.error('❌ Error uploading media:', error);
+    
+    // Check if it's a string length error and provide helpful message
+    if (error instanceof RangeError && error.message.includes('String length exceeds limit')) {
+      console.error('❌ File too large for JavaScript engine. Consider compressing the video or using a smaller file.');
+    }
+    
     return null;
   }
 };
@@ -453,22 +496,34 @@ export const testStorageSetup = async (): Promise<void> => {
 };
 
 // Utility function to upload multiple media files
-export const uploadMedia = async (mediaUris: string[], bucket: string = 'posts'): Promise<string[]> => {
+export const uploadMedia = async (
+  mediaUris: string[], 
+  bucket: string = 'posts',
+  onProgress?: (fileIndex: number, progress: number, totalFiles: number) => void
+): Promise<string[]> => {
   console.log('📤 Uploading multiple media files:', mediaUris);
   
-  const uploadPromises = mediaUris.map(async (uri, index) => {
+  const results: string[] = [];
+  
+  // Upload files sequentially to better track progress
+  for (let index = 0; index < mediaUris.length; index++) {
+    const uri = mediaUris[index];
     const extension = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension);
     const prefix = isVideo ? 'video' : 'image';
     const fileName = `${prefix}_${Date.now()}_${index}.${extension}`;
-    return uploadMediaToStorage(uri, bucket, fileName);
-  });
+    
+    const result = await uploadMediaToStorage(uri, bucket, fileName, (progress) => {
+      onProgress?.(index, progress, mediaUris.length);
+    });
+    
+    if (result) {
+      results.push(result);
+    }
+  }
   
-  const results = await Promise.all(uploadPromises);
-  const validUrls = results.filter(url => url !== null) as string[];
-  
-  console.log('✅ Successfully uploaded media files:', validUrls);
-  return validUrls;
+  console.log('✅ Successfully uploaded media files:', results);
+  return results;
 };
 
 // Backward compatibility alias

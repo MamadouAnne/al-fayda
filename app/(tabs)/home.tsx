@@ -4,7 +4,7 @@ import PostCard from '@/components/feed/PostCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { postsApi, storiesApi, subscriptions } from '@/lib/api';
 import { getAvatarUrl, getPostImageUrls, getStoryMediaUrl } from '@/lib/supabase';
@@ -20,6 +20,7 @@ export default function HomeScreen() {
   const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [visiblePosts, setVisiblePosts] = useState<Set<string>>(new Set());
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const router = useRouter();
@@ -144,6 +145,17 @@ export default function HomeScreen() {
     };
   }, [loadPosts]);
 
+  // Handle screen focus/blur to pause videos when navigating away
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+        setVisiblePosts(new Set()); // Clear visible posts to pause all videos
+      };
+    }, [])
+  );
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -157,16 +169,18 @@ export default function HomeScreen() {
 
   // Handle viewable items change for video pause/play
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    // Only allow ONE post to be visible at a time for video playback
+    const mostVisiblePost = viewableItems.find((item: any) => item.viewablePercentage >= 50);
     const newVisiblePosts = new Set<string>(
-      viewableItems.map((item: any) => item.item.id.toString())
+      mostVisiblePost ? [mostVisiblePost.item.id.toString()] : []
     );
     setVisiblePosts(newVisiblePosts);
-    console.log('📱 Visible posts:', Array.from(newVisiblePosts));
+    console.log('📱 Most visible post for video:', Array.from(newVisiblePosts));
   }, []);
 
   // Viewability config for FlatList
   const viewabilityConfig = useRef({
-    viewAreaCoveragePercentThreshold: 50, // Post is visible when 50% is shown
+    itemVisiblePercentThreshold: 50, // Post is visible when 50% of the item is shown
   }).current;
 
   const headerScale = scrollY.interpolate({
@@ -350,7 +364,7 @@ export default function HomeScreen() {
           <PostCard 
             post={item} 
             index={index} 
-            isVisible={visiblePosts.has(item.id.toString())}
+            isVisible={isScreenFocused && visiblePosts.has(item.id.toString())}
           />
         )}
         onScroll={Animated.event(

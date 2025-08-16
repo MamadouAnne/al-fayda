@@ -1,12 +1,20 @@
 import { View, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView, RefreshControl, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsApi, usersApi } from '@/lib/api';
+import PostCard from '@/components/feed/PostCard';
 // Avatar URLs are stored directly in database - no utility function needed
+
+// Helper function to check if URL is a video
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
+  const lowerUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
+};
 
 const { width } = Dimensions.get('window');
 
@@ -16,13 +24,48 @@ export default function ProfileScreen() {
   
   const [selectedTab, setSelectedTab] = useState('posts');
   const [userPosts, setUserPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [realCounts, setRealCounts] = useState<{followers_count: number, following_count: number} | null>(null);
+  const [visiblePostIndex, setVisiblePostIndex] = useState(0);
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  
+  // Memoize the posts list to prevent infinite re-renders
+  const memoizedPosts = useMemo(() => userPosts.slice(0, 3), [userPosts]);
   
   const fadeAnimation = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastRefreshTime = useRef<number>(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const postRefs = useRef<{ [key: number]: View | null }>({});
+
+  // Handle scroll to determine visible post for video playback
+  const handleScroll = useCallback((event: any) => {
+    if (selectedTab !== 'posts' || memoizedPosts.length === 0) return;
+    
+    const scrollPosition = event.nativeEvent.contentOffset.y;
+    const windowHeight = Dimensions.get('window').height;
+    
+    // Calculate which post is most visible based on scroll position
+    // Profile header is approximately 620px (profile + stats + tabs)
+    const profileHeaderHeight = 620;
+    const postHeight = 600; // Approximate height of each post card
+    
+    // Adjust scroll position to account for profile header
+    const adjustedScrollPosition = Math.max(0, scrollPosition - profileHeaderHeight);
+    
+    // Calculate which post should be visible
+    let newVisibleIndex = 0;
+    if (adjustedScrollPosition > 0) {
+      newVisibleIndex = Math.floor((adjustedScrollPosition + windowHeight / 2) / postHeight);
+      newVisibleIndex = Math.max(0, Math.min(newVisibleIndex, memoizedPosts.length - 1));
+    }
+    
+    if (newVisibleIndex !== visiblePostIndex) {
+      console.log(`📱 Scroll visibility changed from post ${visiblePostIndex} to ${newVisibleIndex} (scroll: ${scrollPosition}, adjusted: ${adjustedScrollPosition})`);
+      setVisiblePostIndex(newVisibleIndex);
+    }
+  }, [selectedTab, memoizedPosts, visiblePostIndex]);
 
   // Avatar sync not needed - following senecom approach with direct URL usage
 
@@ -38,13 +81,33 @@ export default function ProfileScreen() {
         usersApi.getUserProfile(currentUser.id)
       ]);
       
-      const transformedPosts = Array.isArray(posts) ? posts.map(post => ({
-        id: post?.id || '',
-        image: post?.images?.[0] || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80',
-        likes: post?.likes_count || 0,
-        comments: post?.comments_count || 0,
-        images: post?.images || []
-      })) : [];
+      const transformedPosts = Array.isArray(posts) ? posts.map((post, index) => {
+        // Ensure all values are properly defined and typed
+        const postId = post?.id ? String(post.id) : String(index);
+        const numericId = post?.id ? parseInt(String(post.id).slice(-8), 16) || (index + 1) : (index + 1);
+        
+        return {
+          id: numericId,
+          user: {
+            id: parseInt(String(currentUser.id)) || 1,
+            name: String(currentUser.name || 'User'),
+            username: String(currentUser.username || 'user'),
+            avatar: currentUser.avatar || null,
+            verified: Boolean(currentUser.verified),
+            location: currentUser.location ? String(currentUser.location) : undefined
+          },
+          images: Array.isArray(post?.images) ? post.images : [],
+          caption: String(post?.content || ''),
+          likes: Number(post?.likes_count) || 0,
+          comments: [],
+          shares: Number(post?.shares_count) || 0,
+          saves: Number(post?.saves_count) || 0,
+          timestamp: post?.created_at ? String(new Date(post.created_at).toLocaleDateString()) : 'Today',
+          location: post?.location ? String(post.location) : undefined,
+          tags: [],
+          originalId: postId
+        };
+      }) : [];
       
       setUserPosts(transformedPosts);
       
@@ -61,7 +124,7 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -81,8 +144,24 @@ export default function ProfileScreen() {
     }).start();
   }, [currentUser, loadUserData]);
 
+  // Reset visible post index when switching to posts tab
+  useEffect(() => {
+    if (selectedTab === 'posts' && memoizedPosts.length > 0) {
+      console.log(`📱 Setting visible post index to 0 for posts tab`);
+      setVisiblePostIndex(0);
+    }
+  }, [selectedTab, memoizedPosts.length]);
+
+  // Debug visibility state
+  useEffect(() => {
+    console.log(`📱 Profile state: isScreenFocused=${isScreenFocused}, selectedTab=${selectedTab}, visiblePostIndex=${visiblePostIndex}`);
+  }, [isScreenFocused, selectedTab, visiblePostIndex]);
+
   useFocusEffect(
     useCallback(() => {
+      console.log('📱 Profile screen gained focus');
+      setIsScreenFocused(true);
+      
       const refreshData = async () => {
         if (!currentUser) return;
         
@@ -107,6 +186,13 @@ export default function ProfileScreen() {
       };
       
       refreshData();
+      
+      return () => {
+        console.log('📱 Profile screen lost focus - pausing videos');
+        setIsScreenFocused(false);
+        // Force reset visible post index to ensure videos stop
+        setVisiblePostIndex(-1);
+      };
     }, [currentUser?.id])
   );
 
@@ -172,11 +258,12 @@ export default function ProfileScreen() {
     );
   };
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  // Header opacity animation (unused but kept for future use)
+  // const headerOpacity = scrollY.interpolate({
+  //   inputRange: [0, 100],
+  //   outputRange: [0, 1],
+  //   extrapolate: 'clamp',
+  // });
 
   if (isLoading) {
     return (
@@ -214,6 +301,43 @@ export default function ProfileScreen() {
     );
   }
 
+  const renderPostFeed = useCallback(() => {
+    if (memoizedPosts.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="images-outline" size={60} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.emptyTitle}>No posts yet</Text>
+          <Text style={styles.emptyDescription}>
+            Start sharing your moments with the world!
+          </Text>
+          <TouchableOpacity 
+            style={styles.createPostButton}
+            onPress={() => router.push('/create-post')}
+          >
+            <Text style={styles.createPostText}>Create Post</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.feedContainer}>
+        {memoizedPosts.map((post, index) => (
+          <View 
+            key={`profile-post-${post.originalId || post.id}`}
+            ref={(ref) => { postRefs.current[index] = ref; }}
+          >
+            <PostCard 
+              post={post} 
+              index={index}
+              isVisible={isScreenFocused && selectedTab === 'posts' && index === visiblePostIndex}
+            />
+          </View>
+        ))}
+      </View>
+    );
+  }, [memoizedPosts, selectedTab, visiblePostIndex]);
+
   const renderPostGrid = () => {
     if (userPosts.length === 0) {
       return (
@@ -235,13 +359,20 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.postsGrid}>
-        {userPosts.map((post, index) => (
+        {userPosts.map((post) => (
           <TouchableOpacity 
             key={post.id}
             style={styles.postItem}
-            onPress={() => router.push(`/post/${post.id}`)}
+            onPress={() => router.push(`/post/${post.originalId || post.id}`)}
           >
-            <Image source={{ uri: post.image }} style={styles.postImage} />
+            <Image source={{ uri: post.images[0] }} style={styles.postImage} />
+            {/* Video indicator */}
+            {post.images[0] && isVideoUrl(post.images[0]) && (
+              <View style={styles.videoIcon}>
+                <Ionicons name="play-circle" size={24} color="white" />
+              </View>
+            )}
+            {/* Multiple images indicator */}
             {post.images?.length > 1 && (
               <View style={styles.multipleIcon}>
                 <Ionicons name="copy" size={16} color="white" />
@@ -255,7 +386,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.statItem}>
                   <Ionicons name="chatbubble" size={16} color="white" />
-                  <Text style={styles.statText}>{post.comments}</Text>
+                  <Text style={styles.statText}>{post.comments?.length || 0}</Text>
                 </View>
               </View>
             </View>
@@ -303,11 +434,15 @@ export default function ProfileScreen() {
       </View>
 
       <Animated.ScrollView 
+        ref={scrollViewRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { 
+            useNativeDriver: false,
+            listener: handleScroll
+          }
         )}
         scrollEventThrottle={16}
         refreshControl={
@@ -443,13 +578,18 @@ export default function ProfileScreen() {
         <View style={styles.tabSection}>
           <View style={styles.tabContainer}>
             {[
-              { id: 'posts', label: 'Posts', icon: 'grid-outline' },
-              { id: 'saved', label: 'Saved', icon: 'bookmark-outline' },
-              { id: 'tagged', label: 'Tagged', icon: 'person-outline' }
+              { id: 'posts', label: 'Feed', icon: 'list-outline' },
+              { id: 'grid', label: 'Grid', icon: 'grid-outline' },
+              { id: 'saved', label: 'Saved', icon: 'bookmark-outline' }
             ].map((tab) => (
               <TouchableOpacity
                 key={tab.id}
-                onPress={() => setSelectedTab(tab.id)}
+                onPress={() => {
+                  setSelectedTab(tab.id);
+                  if (tab.id === 'posts') {
+                    setVisiblePostIndex(0);
+                  }
+                }}
                 style={[styles.tab, selectedTab === tab.id && styles.activeTab]}
               >
                 <Ionicons 
@@ -466,8 +606,9 @@ export default function ProfileScreen() {
         </View>
 
         {/* Content */}
-        <View style={styles.contentSection}>
-          {selectedTab === 'posts' && renderPostGrid()}
+        <View style={selectedTab === 'posts' ? styles.feedContentSection : styles.contentSection}>
+          {selectedTab === 'posts' && renderPostFeed()}
+          {selectedTab === 'grid' && renderPostGrid()}
         </View>
       </Animated.ScrollView>
     </View>
@@ -759,6 +900,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
+  feedContentSection: {
+    paddingHorizontal: 0,
+    paddingBottom: 100,
+  },
+  feedContainer: {
+    paddingHorizontal: 0,
+  },
   postsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -773,6 +921,20 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 4,
+  },
+  videoIcon: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 5,
   },
   multipleIcon: {
     position: 'absolute',

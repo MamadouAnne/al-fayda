@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { postsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadMedia, testStorageSetup } from '@/lib/supabase';
+import ProgressBar from '@/components/ProgressBar';
 const { width } = Dimensions.get('window');
 
 interface MediaItem {
@@ -45,6 +46,9 @@ export default function CreatePostScreen() {
   const [hashtagQuery, setHashtagQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentUploadingFile, setCurrentUploadingFile] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
   const captionRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -94,10 +98,26 @@ export default function CreatePostScreen() {
         quality: 0.8,
         aspect: [1, 1],
         allowsEditing: false,
+        videoMaxDuration: 60, // Limit videos to 60 seconds
       });
 
       if (!result.canceled && result.assets) {
-        const newMediaItems: MediaItem[] = result.assets.map(asset => ({
+        // Filter out very large files to prevent upload issues
+        const validAssets = result.assets.filter(asset => {
+          const isVideo = asset.type === 'video';
+          const maxSize = isVideo ? 100 * 1024 * 1024 : 50 * 1024 * 1024; // 100MB for videos, 50MB for images
+          
+          if (asset.fileSize && asset.fileSize > maxSize) {
+            Alert.alert(
+              'File Too Large', 
+              `${isVideo ? 'Video' : 'Image'} files must be under ${isVideo ? '100MB' : '50MB'}. Please choose a smaller file or compress it.`
+            );
+            return false;
+          }
+          return true;
+        });
+
+        const newMediaItems: MediaItem[] = validAssets.map(asset => ({
           uri: asset.uri,
           type: asset.type === 'video' ? 'video' : 'photo'
         }));
@@ -202,16 +222,30 @@ export default function CreatePostScreen() {
       let uploadedImageUrls: string[] = [];
       
       if (imageUris.length > 0) {
-        console.log('📤 Uploading images to storage...');
+        console.log('📤 Uploading media to storage...');
+        setIsUploading(true);
+        setUploadProgress(0);
         
         // Test storage setup first
         await testStorageSetup();
         
-        uploadedImageUrls = await uploadMedia(imageUris, 'posts');
-        console.log('✅ Images uploaded:', uploadedImageUrls);
+        uploadedImageUrls = await uploadMedia(imageUris, 'posts', (fileIndex, progress, totalFiles) => {
+          // Calculate overall progress
+          const fileProgress = progress / 100;
+          const overallProgress = ((fileIndex + fileProgress) / totalFiles) * 100;
+          setUploadProgress(overallProgress);
+          
+          // Update current file being uploaded
+          const extension = imageUris[fileIndex].split('.').pop()?.toLowerCase() || '';
+          const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension);
+          setCurrentUploadingFile(`${isVideo ? 'Video' : 'Image'} ${fileIndex + 1}/${totalFiles}`);
+        });
+        
+        setIsUploading(false);
+        console.log('✅ Media uploaded:', uploadedImageUrls);
         
         if (uploadedImageUrls.length === 0) {
-          throw new Error('Failed to upload any images');
+          throw new Error('Failed to upload any media');
         }
       }
       
@@ -234,6 +268,9 @@ export default function CreatePostScreen() {
       Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setCurrentUploadingFile('');
     }
   };
 
@@ -271,15 +308,15 @@ export default function CreatePostScreen() {
           <Text style={styles.headerTitle}>Create Post</Text>
           <TouchableOpacity 
             onPress={handlePost}
-            disabled={isLoading}
-            style={[styles.postButton, { opacity: isLoading ? 0.6 : 1 }]}
+            disabled={isLoading || isUploading}
+            style={[styles.postButton, { opacity: (isLoading || isUploading) ? 0.6 : 1 }]}
           >
             <LinearGradient
               colors={['#667eea', '#764ba2']}
               style={styles.postButtonGradient}
             >
               <Text style={styles.postButtonText}>
-                {isLoading ? 'Posting...' : 'Post'}
+                {isUploading ? 'Uploading...' : isLoading ? 'Posting...' : 'Post'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -330,6 +367,19 @@ export default function CreatePostScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.mediaList}
+              />
+            </View>
+          )}
+
+          {/* Upload Progress */}
+          {isUploading && (
+            <View style={styles.progressContainer}>
+              <ProgressBar
+                progress={uploadProgress}
+                height={8}
+                showPercentage={true}
+                label={`Uploading ${currentUploadingFile}...`}
+                animated={true}
               />
             </View>
           )}
@@ -505,6 +555,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 12,
+  },
+  progressContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   locationContainer: {
     flexDirection: 'row',
