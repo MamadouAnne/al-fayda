@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
 import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -94,8 +95,10 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   useEffect(() => {
     if (isVisible) {
       hasBeenVisibleRef.current = true;
+      console.log(`📱 Post ${post.id} marked as having been visible`);
     }
-  }, [isVisible]);
+    console.log(`📱 Post ${post.id} visibility changed: ${isVisible}`);
+  }, [isVisible, post.id]);
 
   // Stop videos when screen loses focus (navigating away)
   useFocusEffect(
@@ -120,31 +123,35 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     }, [isVideoPlaying, post.id])
   );
   
-  // Temporarily disable auto-stopping until visibility detection is fixed
-  // Effect to handle stopping videos when post becomes invisible (scroll away or screen change)
-  // useEffect(() => {
-  //   const wasVisible = prevVisibleRef.current;
-  //   const isNowVisible = isVisible;
+  // Effect to handle stopping videos when post becomes invisible (scroll away)
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    const isNowVisible = isVisible;
     
-  //   // Stop video if it's playing and post is no longer visible
-  //   if (isVideoPlaying && !isNowVisible) {
-  //     console.log(`📹 Post ${post.id} stopping video - lost visibility (was: ${wasVisible}, now: ${isNowVisible})`);
-  //     clearGlobalPlayingVideo(String(post.id));
-  //     setIsVideoPlaying(false);
+    console.log(`📹 Post ${post.id} visibility effect: wasVisible=${wasVisible}, isNowVisible=${isNowVisible}, isVideoPlaying=${isVideoPlaying}, hasBeenVisible=${hasBeenVisibleRef.current}`);
+    
+    // Stop video if:
+    // 1. Video is currently playing
+    // 2. Post is now not visible (strict visibility check, no fallbacks)
+    // 3. Post has been visible at least once (to avoid stopping on mount)
+    if (isVideoPlaying && !isNowVisible && hasBeenVisibleRef.current) {
+      console.log(`📹 Post ${post.id} stopping video - scrolled away (was: ${wasVisible}, now: ${isNowVisible})`);
+      clearGlobalPlayingVideo(String(post.id));
+      setIsVideoPlaying(false);
       
-  //     // Force pause all videos in this post
-  //     Object.values(videoRefs.current).forEach(video => {
-  //       if (video) {
-  //         video.pauseAsync().catch(error => 
-  //           console.log('Video pause error:', error)
-  //         );
-  //       }
-  //     });
-  //   }
+      // Force pause all videos in this post
+      Object.values(videoRefs.current).forEach(video => {
+        if (video) {
+          video.pauseAsync().catch(error => 
+            console.log('Video pause error on scroll away:', error)
+          );
+        }
+      });
+    }
     
-  //   // Update previous visibility
-  //   prevVisibleRef.current = isNowVisible;
-  // }, [isVisible, isVideoPlaying, post.id]);
+    // Update previous visibility
+    prevVisibleRef.current = isNowVisible;
+  }, [isVisible, isVideoPlaying, post.id]);
 
   // Temporarily disable image switching effect to test video playback
   // Effect to reset video playing state when switching images
@@ -188,19 +195,21 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   const handlePlayVideo = useCallback(() => {
     console.log(`📹 Play button clicked for post ${post.id}, isVisible: ${isVisible}, hasBeenVisible: ${hasBeenVisibleRef.current}`);
     
-    // Temporarily allow video to start regardless of visibility to get basic functionality working
-    // TODO: Re-add visibility check once profile screen visibility is fixed
-    // if (!isVisible) {
-    //   console.log(`📹 Cannot start video for post ${post.id} - post not visible`);
-    //   return;
-    // }
+    // Allow video to start if post is visible OR if it's one of the first few posts and hasn't been marked visible yet
+    // This handles the case where FlatList hasn't properly detected visibility yet
+    const canPlay = isVisible || (index !== undefined && index <= 2 && !hasBeenVisibleRef.current);
+    
+    if (!canPlay) {
+      console.log(`📹 Cannot start video for post ${post.id} - not visible and not in initial view`);
+      return;
+    }
     
     // Register this video as the globally playing one (this will stop any other playing video)
     setGlobalPlayingVideo(String(post.id), stopThisVideo);
     
     setIsVideoPlaying(true);
-    console.log(`📹 Video set to play for post ${post.id}`);
-  }, [post.id, stopThisVideo, isVisible]);
+    console.log(`📹 Video set to play for post ${post.id} (isVisible: ${isVisible}, index: ${index})`);
+  }, [post.id, stopThisVideo, isVisible, index]);
 
   const handlePauseVideo = useCallback(() => {
     console.log(`📹 Pause button clicked for post ${post.id}`);
@@ -232,12 +241,12 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   // Calculate shouldPlayVideo using useMemo to ensure it's stable
   const shouldPlayVideoForCurrentImage = useMemo(() => {
     // Video can play if user wants it to play AND it's the current image
-    // We don't check isVisible here because that would prevent initial playback
-    // The visibility effect above handles pausing when scrolling away
-    const result = isVideoPlaying && currentImageIndex === 0;
-    console.log(`📹 Video ${post.id} shouldPlay calculation: isVideoPlaying=${isVideoPlaying}, currentImageIndex=${currentImageIndex}, result=${result}`);
+    // Use more permissive visibility check - allow early posts or explicitly visible posts
+    const isEffectivelyVisible = isVisible || (index !== undefined && index <= 2 && !hasBeenVisibleRef.current);
+    const result = isVideoPlaying && currentImageIndex === 0 && isEffectivelyVisible;
+    console.log(`📹 Video ${post.id} shouldPlay calculation: isVideoPlaying=${isVideoPlaying}, currentImageIndex=${currentImageIndex}, isVisible=${isVisible}, isEffectivelyVisible=${isEffectivelyVisible}, result=${result}`);
     return result;
-  }, [isVideoPlaying, currentImageIndex, post.id]);
+  }, [isVideoPlaying, currentImageIndex, isVisible, index, post.id]);
 
   const renderMedia = useCallback((mediaUrl: string, imgIndex: number) => {
     const isVideo = isVideoUrl(mediaUrl);
@@ -307,15 +316,20 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
       <View style={styles.header}>
         <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
           <View style={styles.avatarContainer}>
-            {post.user.avatar ? (
-              <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.defaultAvatar]}>
-                <Text style={styles.initialsText}>
-                  {(post.user.name || post.user.username || 'U').slice(0, 2).toUpperCase()}
-                </Text>
-              </View>
-            )}
+            <LinearGradient
+              colors={['#f093fb', '#f5576c', '#4facfe', '#00f2fe']}
+              style={styles.avatarRing}
+            >
+              {post.user.avatar ? (
+                <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.defaultAvatar]}>
+                  <Text style={styles.initialsText}>
+                    {(post.user.name || post.user.username || 'U').slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </LinearGradient>
           </View>
           <View style={styles.userDetails}>
             <View style={styles.nameRow}>
@@ -370,18 +384,38 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
         <View style={styles.leftActions}>
           <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
             <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
-              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={26} color={isLiked ? "#EF4444" : "#374151"} />
+              <LinearGradient
+                colors={isLiked ? ['#EF4444', '#DC2626'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+                style={styles.actionButtonGradient}
+              >
+                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color="white" />
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
           <TouchableOpacity onPress={handlePostPress} style={styles.actionButton}>
-            <Ionicons name="chatbubble-outline" size={24} color="#374151" />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+              style={styles.actionButtonGradient}
+            >
+              <Ionicons name="chatbubble-outline" size={22} color="white" />
+            </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="paper-plane-outline" size={24} color="#374151" />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+              style={styles.actionButtonGradient}
+            >
+              <Ionicons name="paper-plane-outline" size={22} color="white" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleSave}>
-          <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={24} color={isSaved ? "#3B82F6" : "#374151"} />
+        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+          <LinearGradient
+            colors={isSaved ? ['#3B82F6', '#2563EB'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            style={styles.saveButtonGradient}
+          >
+            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={22} color="white" />
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -406,22 +440,17 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'white',
-    borderRadius: 24,
+    backgroundColor: 'transparent',
     marginBottom: 20,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    marginHorizontal: 0,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 20,
+    paddingBottom: 15,
   },
   userInfo: {
     flexDirection: 'row',
@@ -430,9 +459,16 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
   },
+  avatarRing: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    padding: 3,
+    backgroundColor: 'transparent',
+  },
   avatar: {
-    width: 48,
-    height: 48,
+    width: '100%',
+    height: '100%',
     borderRadius: 24,
   },
   defaultAvatar: {
@@ -453,13 +489,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   userName: {
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: 'white',
     fontSize: 16,
   },
   username: {
     fontSize: 14,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.7)',
   },
   moreButton: {
     padding: 8,
@@ -469,10 +505,10 @@ const styles = StyleSheet.create({
   },
   imageScrollView: {},
   postImage: {
-    width: width - 32,
-    height: 400,
-    borderRadius: 16,
-    marginHorizontal: 16,
+    width: width,
+    height: width,
+    borderRadius: 0,
+    marginHorizontal: 0,
   },
   indicatorContainer: {
     flexDirection: 'row',
@@ -491,36 +527,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
   },
   leftActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 20,
   },
-  actionButton: {},
+  actionButton: {
+    marginRight: 20,
+  },
+  actionButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  saveButtonGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   statsRow: {
     paddingHorizontal: 16,
   },
   likesText: {
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: 'white',
     fontSize: 14,
   },
   captionSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 15,
+    paddingBottom: 15,
   },
   captionText: {
-    color: '#1F2937',
-    fontSize: 14,
-    marginTop: 4,
+    color: 'white',
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 8,
   },
   authorName: {
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: 'white',
   },
   viewCommentsText: {
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
     marginTop: 4,
   },
@@ -530,7 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   noImageText: {
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.7)',
   },
   videoContainer: {
     position: 'relative',

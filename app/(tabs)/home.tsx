@@ -169,18 +169,26 @@ export default function HomeScreen() {
 
   // Handle viewable items change for video pause/play
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    // Only allow ONE post to be visible at a time for video playback
-    const mostVisiblePost = viewableItems.find((item: any) => item.viewablePercentage >= 50);
-    const newVisiblePosts = new Set<string>(
-      mostVisiblePost ? [mostVisiblePost.item.id.toString()] : []
-    );
+    // Allow posts with at least 30% visibility to be considered visible
+    const visiblePosts = viewableItems
+      .filter((item: any) => item.viewablePercentage >= 30)
+      .map((item: any) => item.item.id.toString());
+    
+    const newVisiblePosts = new Set<string>(visiblePosts);
+    
+    // Simple logging
+    if (visiblePosts.length > 0) {
+      console.log('📱 Visible posts:', visiblePosts);
+    }
+    
     setVisiblePosts(newVisiblePosts);
-    console.log('📱 Most visible post for video:', Array.from(newVisiblePosts));
   }, []);
 
   // Viewability config for FlatList
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50, // Post is visible when 50% of the item is shown
+    itemVisiblePercentThreshold: 30, // Post is visible when 30% of the item is shown
+    minimumViewTime: 50, // Wait 50ms before considering item visible/invisible
+    waitForInteraction: false, // Don't wait for user interaction to stop
   }).current;
 
   const headerScale = scrollY.interpolate({
