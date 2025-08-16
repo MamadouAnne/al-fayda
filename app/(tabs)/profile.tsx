@@ -152,10 +152,23 @@ export default function ProfileScreen() {
     }
   }, [selectedTab, memoizedPosts.length]);
 
+  // Also set visible post when screen gains focus and we're on posts tab
+  useEffect(() => {
+    if (isScreenFocused && selectedTab === 'posts' && memoizedPosts.length > 0 && visiblePostIndex === -1) {
+      console.log(`📱 Screen focused - setting visible post index to 0`);
+      setVisiblePostIndex(0);
+    }
+  }, [isScreenFocused, selectedTab, memoizedPosts.length, visiblePostIndex]);
+
   // Debug visibility state
   useEffect(() => {
     console.log(`📱 Profile state: isScreenFocused=${isScreenFocused}, selectedTab=${selectedTab}, visiblePostIndex=${visiblePostIndex}`);
   }, [isScreenFocused, selectedTab, visiblePostIndex]);
+
+  // Debug which content is being rendered
+  useEffect(() => {
+    console.log(`📱 Rendering content for tab: ${selectedTab}`);
+  }, [selectedTab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -188,9 +201,9 @@ export default function ProfileScreen() {
       refreshData();
       
       return () => {
-        console.log('📱 Profile screen lost focus - pausing videos');
+        console.log('📱 Profile screen lost focus - stopping all videos');
         setIsScreenFocused(false);
-        // Force reset visible post index to ensure videos stop
+        // Force reset visible post index to ensure videos stop when leaving screen
         setVisiblePostIndex(-1);
       };
     }, [currentUser?.id])
@@ -302,6 +315,8 @@ export default function ProfileScreen() {
   }
 
   const renderPostFeed = useCallback(() => {
+    console.log(`📱 renderPostFeed called with ${memoizedPosts.length} posts, selectedTab: ${selectedTab}, visiblePostIndex: ${visiblePostIndex}, isScreenFocused: ${isScreenFocused}`);
+    
     if (memoizedPosts.length === 0) {
       return (
         <View style={styles.emptyState}>
@@ -322,21 +337,26 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.feedContainer}>
-        {memoizedPosts.map((post, index) => (
-          <View 
-            key={`profile-post-${post.originalId || post.id}`}
-            ref={(ref) => { postRefs.current[index] = ref; }}
-          >
-            <PostCard 
-              post={post} 
-              index={index}
-              isVisible={isScreenFocused && selectedTab === 'posts' && index === visiblePostIndex}
-            />
-          </View>
-        ))}
+        {memoizedPosts.map((post, index) => {
+          const isPostVisible = isScreenFocused && selectedTab === 'posts' && index === visiblePostIndex;
+          console.log(`📱 Post ${index} visibility: isScreenFocused=${isScreenFocused}, selectedTab=${selectedTab}, visiblePostIndex=${visiblePostIndex}, index=${index}, isVisible=${isPostVisible}`);
+          
+          return (
+            <View 
+              key={`profile-post-${post.originalId || post.id}`}
+              ref={(ref) => { postRefs.current[index] = ref; }}
+            >
+              <PostCard 
+                post={post} 
+                index={index}
+                isVisible={isPostVisible}
+              />
+            </View>
+          );
+        })}
       </View>
     );
-  }, [memoizedPosts, selectedTab, visiblePostIndex]);
+  }, [memoizedPosts, selectedTab, visiblePostIndex, isScreenFocused]);
 
   const renderPostGrid = () => {
     if (userPosts.length === 0) {

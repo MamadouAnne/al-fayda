@@ -1,6 +1,6 @@
 import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Animated, StyleSheet, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
 import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
 
@@ -86,33 +86,65 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     configureAudio();
   }, []);
 
-  // Track previous visibility to detect actual changes
+  // Track previous visibility to avoid stopping videos immediately on mount
   const prevVisibleRef = useRef(isVisible);
+  const hasBeenVisibleRef = useRef(false);
   
-  // Effect to handle visibility changes and pause videos when scrolling away
+  // Track if this post has ever been visible
   useEffect(() => {
-    const wasVisible = prevVisibleRef.current;
-    const isNowVisible = isVisible;
-    
-    // Only pause when visibility changes from true to false (scrolling away)
-    if (wasVisible && !isNowVisible && isVideoPlaying) {
-      console.log(`📹 Post ${post.id} scrolled out of view while playing - auto-pausing video`);
-      clearGlobalPlayingVideo(String(post.id));
-      setIsVideoPlaying(false);
-      
-      // Force pause all videos in this post
-      Object.values(videoRefs.current).forEach(video => {
-        if (video) {
-          video.pauseAsync().catch(error => 
-            console.log('Video pause error:', error)
-          );
-        }
-      });
+    if (isVisible) {
+      hasBeenVisibleRef.current = true;
     }
+  }, [isVisible]);
+
+  // Stop videos when screen loses focus (navigating away)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        // Screen is losing focus - stop any playing video
+        if (isVideoPlaying) {
+          console.log(`📹 Screen lost focus - stopping video for post ${post.id}`);
+          clearGlobalPlayingVideo(String(post.id));
+          setIsVideoPlaying(false);
+          
+          // Force pause all videos in this post
+          Object.values(videoRefs.current).forEach(video => {
+            if (video) {
+              video.pauseAsync().catch(error => 
+                console.log('Video pause error on screen unfocus:', error)
+              );
+            }
+          });
+        }
+      };
+    }, [isVideoPlaying, post.id])
+  );
+  
+  // Temporarily disable auto-stopping until visibility detection is fixed
+  // Effect to handle stopping videos when post becomes invisible (scroll away or screen change)
+  // useEffect(() => {
+  //   const wasVisible = prevVisibleRef.current;
+  //   const isNowVisible = isVisible;
     
-    // Update the previous visibility
-    prevVisibleRef.current = isNowVisible;
-  }, [isVisible, isVideoPlaying, post.id]);
+  //   // Stop video if it's playing and post is no longer visible
+  //   if (isVideoPlaying && !isNowVisible) {
+  //     console.log(`📹 Post ${post.id} stopping video - lost visibility (was: ${wasVisible}, now: ${isNowVisible})`);
+  //     clearGlobalPlayingVideo(String(post.id));
+  //     setIsVideoPlaying(false);
+      
+  //     // Force pause all videos in this post
+  //     Object.values(videoRefs.current).forEach(video => {
+  //       if (video) {
+  //         video.pauseAsync().catch(error => 
+  //           console.log('Video pause error:', error)
+  //         );
+  //       }
+  //     });
+  //   }
+    
+  //   // Update previous visibility
+  //   prevVisibleRef.current = isNowVisible;
+  // }, [isVisible, isVideoPlaying, post.id]);
 
   // Temporarily disable image switching effect to test video playback
   // Effect to reset video playing state when switching images
@@ -154,14 +186,21 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   }, [currentImageIndex]);
 
   const handlePlayVideo = useCallback(() => {
-    console.log(`📹 Play button clicked for post ${post.id}`);
+    console.log(`📹 Play button clicked for post ${post.id}, isVisible: ${isVisible}, hasBeenVisible: ${hasBeenVisibleRef.current}`);
+    
+    // Temporarily allow video to start regardless of visibility to get basic functionality working
+    // TODO: Re-add visibility check once profile screen visibility is fixed
+    // if (!isVisible) {
+    //   console.log(`📹 Cannot start video for post ${post.id} - post not visible`);
+    //   return;
+    // }
     
     // Register this video as the globally playing one (this will stop any other playing video)
     setGlobalPlayingVideo(String(post.id), stopThisVideo);
     
     setIsVideoPlaying(true);
     console.log(`📹 Video set to play for post ${post.id}`);
-  }, [post.id, stopThisVideo]);
+  }, [post.id, stopThisVideo, isVisible]);
 
   const handlePauseVideo = useCallback(() => {
     console.log(`📹 Pause button clicked for post ${post.id}`);
@@ -196,11 +235,9 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     // We don't check isVisible here because that would prevent initial playback
     // The visibility effect above handles pausing when scrolling away
     const result = isVideoPlaying && currentImageIndex === 0;
-    if (result) {
-      console.log(`📹 Video ${post.id} should play: isVideoPlaying=${isVideoPlaying}, isVisible=${isVisible}`);
-    }
+    console.log(`📹 Video ${post.id} shouldPlay calculation: isVideoPlaying=${isVideoPlaying}, currentImageIndex=${currentImageIndex}, result=${result}`);
     return result;
-  }, [isVideoPlaying, currentImageIndex, post.id, isVisible]);
+  }, [isVideoPlaying, currentImageIndex, post.id]);
 
   const renderMedia = useCallback((mediaUrl: string, imgIndex: number) => {
     const isVideo = isVideoUrl(mediaUrl);
