@@ -280,24 +280,6 @@ export default function StoryViewerScreen() {
         <Text style={styles.viewsText}>
           👁 {currentStory.views_count} views
         </Text>
-        <Text style={styles.debugText}>
-          User {currentUserIdx + 1} of {allUsers.length} | Story {currentStoryIndex + 1} of {stories.length}
-        </Text>
-        {__DEV__ && (
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={() => {
-              console.log('Debug info:', {
-                allUsers,
-                currentUserIdx,
-                allUserStories,
-                currentUserIndex
-              });
-            }}
-          >
-            <Text style={styles.debugButtonText}>Debug</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
@@ -441,23 +423,5 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
-  },
-  debugText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  debugButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 8,
-    alignSelf: 'center',
-  },
-  debugButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
 });
