@@ -45,7 +45,9 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
   const [isSaved, setIsSaved] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [videoPlayCounts, setVideoPlayCounts] = useState<{ [key: number]: number }>({});
   const [manualPlayStates, setManualPlayStates] = useState<{ [key: number]: boolean }>({});
+  const [showControls, setShowControls] = useState<{ [key: number]: boolean }>({});
   const videoRefs = useRef<{ [key: number]: Video | null }>({});
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
@@ -116,22 +118,18 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
     const isCurrentMediaVideo = currentMediaUrl && isVideoUrl(currentMediaUrl);
 
     if (currentVideo && isCurrentMediaVideo) {
+      const playCount = videoPlayCounts[currentImageIndex] || 0;
       const isManualPlay = manualPlayStates[currentImageIndex];
       
-      console.log(`🎬 Video ${currentImageIndex} - Manual: ${isManualPlay}, Visible: ${isVisible}`);
+      console.log(`🎬 Video ${currentImageIndex} - Play count: ${playCount}, Manual: ${isManualPlay}, Visible: ${isVisible}`);
       
-      // Auto-play videos when they become visible (remove the 2-play limit)
-      if (!isManualPlay) {
-        currentVideo.setPositionAsync(0).then(() => {
-          currentVideo.playAsync().then(() => {
-            currentVideo.setVolumeAsync(1.0);
-            console.log(`✅ Video auto-playing`);
-          }).catch(err => {
-            console.log('Video play error (expected on first load):', err.message);
-          });
-        });
-      } else {
-        // If user manually played, allow it to continue
+      // Only manage playback state, don't interfere with ongoing playback
+      if (playCount >= 3 && !isManualPlay) {
+        // Stop the video after 3 auto-plays
+        currentVideo.pauseAsync();
+        console.log('🛑 Video stopped after 3 auto-plays (from useEffect)');
+      } else if (isManualPlay) {
+        // If user manually played, ensure it's playing
         currentVideo.playAsync().then(() => {
           currentVideo.setVolumeAsync(1.0);
           console.log('✅ Video manually playing with sound enabled');
@@ -139,8 +137,31 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
           console.log('Video play error:', err.message);
         });
       }
+      // For auto-play videos (playCount < 3), let shouldPlay handle the playback
     }
-  }, [currentImageIndex, post.images, manualPlayStates, isVisible]);
+  }, [currentImageIndex, post.images, videoPlayCounts, manualPlayStates, isVisible]);
+
+  // Auto-hide video controls after 3 seconds
+  useEffect(() => {
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    
+    Object.entries(showControls).forEach(([indexStr, isVisible]) => {
+      if (isVisible) {
+        const timeout = setTimeout(() => {
+          setShowControls(prev => ({
+            ...prev,
+            [parseInt(indexStr)]: false
+          }));
+          console.log(`🎮 Auto-hiding controls for video ${indexStr}`);
+        }, 2000);
+        timeouts.push(timeout);
+      }
+    });
+
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
+  }, [showControls]);
 
   const handleLike = () => {
     Animated.sequence([
@@ -218,7 +239,7 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
 
       {/* Post Images */}
       {post.images && post.images.length > 0 ? (
-        <TouchableOpacity onPress={handlePostPress} style={styles.imageSection}>
+        <View style={styles.imageSection}>
           <ScrollView 
             horizontal 
             pagingEnabled 
@@ -236,60 +257,164 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
               
               if (isVideo) {
                 return (
-                  <Video
-                    key={imgIndex}
-                    ref={(ref) => {
-                      videoRefs.current[imgIndex] = ref;
-                    }}
-                    source={{ uri: mediaUrl }}
-                    style={styles.postImage}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay={isVisible && imgIndex === currentImageIndex}
-                    isLooping={true}
-                    isMuted={false}
-                    volume={1.0}
-                    useNativeControls={false}
-                    onError={(error) => console.error('❌ Video failed to load:', mediaUrl, error)}
-                    onLoad={() => console.log('✅ Video loaded successfully:', mediaUrl)}
-                    onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-                      if (status.isLoaded && status.didJustFinish && imgIndex === currentImageIndex && isVisible) {
-                        console.log(`📹 Video ${imgIndex} finished playing, looping...`);
-                      }
-                    }}
-                  >
+                  <View key={`video-container-${imgIndex}`} style={styles.videoContainer}>
+                    <Video
+                      ref={(ref) => {
+                        videoRefs.current[imgIndex] = ref;
+                      }}
+                      source={{ uri: mediaUrl }}
+                      style={styles.postImage}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay={isVisible && imgIndex === currentImageIndex && (
+                        (videoPlayCounts[imgIndex] || 0) < 3 || manualPlayStates[imgIndex]
+                      )}
+                      isLooping={false}
+                      isMuted={false}
+                      volume={1.0}
+                      useNativeControls={false}
+                      onError={(error) => console.error('❌ Video failed to load:', mediaUrl, error)}
+                      onLoad={() => console.log('✅ Video loaded successfully:', mediaUrl)}
+                      onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+                        if (status.isLoaded && status.didJustFinish && imgIndex === currentImageIndex && isVisible) {
+                          const currentPlayCount = videoPlayCounts[imgIndex] || 0;
+                          const isManualPlay = manualPlayStates[imgIndex];
+                          const newPlayCount = currentPlayCount + 1;
+                          
+                          console.log(`📹 Video ${imgIndex} finished play ${newPlayCount}, manual: ${isManualPlay}`);
+                          
+                          // Increment play count
+                          setVideoPlayCounts(prev => ({
+                            ...prev,
+                            [imgIndex]: newPlayCount
+                          }));
+                          
+                          const video = videoRefs.current[imgIndex];
+                          if (video && !isManualPlay) {
+                            // Only restart if we haven't reached limit (3 times)
+                            if (newPlayCount < 3) {
+                              setTimeout(() => {
+                                video.replayAsync().then(() => {
+                                  video.setVolumeAsync(1.0);
+                                  console.log(`🔄 Video auto-playing ${newPlayCount + 1}/3`);
+                                });
+                              }, 200);
+                            } else {
+                              video.pauseAsync();
+                              console.log('🛑 Video finished 3 auto-plays, stopping');
+                            }
+                          }
+                        }
+                      }}
+                    />
+                    
+                    {/* Custom video controls overlay */}
+                    {showControls[imgIndex] && (
+                      <View style={styles.customControls}>
+                        <TouchableOpacity 
+                          style={styles.playPauseButton}
+                          onPress={() => {
+                            const video = videoRefs.current[imgIndex];
+                            if (video) {
+                              video.getStatusAsync().then((status) => {
+                                if (status.isLoaded) {
+                                  if (status.isPlaying) {
+                                    video.pauseAsync();
+                                  } else {
+                                    video.playAsync();
+                                  }
+                                }
+                              });
+                            }
+                          }}
+                        >
+                          <Ionicons name="play-circle" size={60} color="rgba(255,255,255,0.8)" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    
+                    {/* Simple tap overlay for showing controls */}
+                    {!showControls[imgIndex] && (
+                      <TouchableOpacity 
+                        style={styles.videoTapArea}
+                        activeOpacity={1}
+                        onPress={() => {
+                          setShowControls(prev => ({
+                            ...prev,
+                            [imgIndex]: true
+                          }));
+                          console.log('🎮 Video controls shown');
+                        }}
+                      />
+                    )}
                     {/* Video overlay indicator and manual play button */}
                     <TouchableOpacity 
+                      key={`video-overlay-${imgIndex}`}
                       style={styles.videoOverlay}
                       onPress={() => {
                         const video = videoRefs.current[imgIndex];
+                        const playCount = videoPlayCounts[imgIndex] || 0;
+                        const isManualPlay = manualPlayStates[imgIndex];
+                        const hasControls = showControls[imgIndex];
+                        
                         if (video) {
-                          setManualPlayStates(prev => ({
-                            ...prev,
-                            [imgIndex]: !prev[imgIndex]
-                          }));
-                          console.log('🎮 Video manual control toggled');
+                          // If video has finished 3 auto-plays and no controls shown, enable manual play
+                          if (playCount >= 3 && !isManualPlay && !hasControls) {
+                            setManualPlayStates(prev => ({
+                              ...prev,
+                              [imgIndex]: true
+                            }));
+                            
+                            // Reset the video to start from beginning for manual play
+                            video.setPositionAsync(0).then(() => {
+                              video.playAsync().then(() => {
+                                video.setVolumeAsync(1.0);
+                                console.log('🎮 Video manually started by user');
+                              });
+                            });
+                          } else {
+                            // Toggle video controls visibility
+                            setShowControls(prev => ({
+                              ...prev,
+                              [imgIndex]: !prev[imgIndex]
+                            }));
+                            console.log('🎮 Video controls toggled');
+                          }
                         }
                       }}
                     >
                       <View style={styles.videoIndicator}>
                         <Ionicons 
-                          name="volume-high"
+                          name={(() => {
+                            if (imgIndex !== currentImageIndex) return "play";
+                            const playCount = videoPlayCounts[imgIndex] || 0;
+                            const isManualPlay = manualPlayStates[imgIndex];
+                            const hasControls = showControls[imgIndex];
+                            
+                            if (playCount >= 3 && !isManualPlay && !hasControls) {
+                              return "play"; // Show play button after 3 auto-plays
+                            }
+                            if (hasControls) {
+                              return "settings"; // Show settings icon when controls are visible
+                            }
+                            return "volume-high"; // Show volume when playing
+                          })()}
                           size={20} 
-                          color="white" 
+                          color="white"
                         />
                       </View>
                     </TouchableOpacity>
-                  </Video>
+                  </View>
                 );
               } else {
                 return (
-                  <Image 
-                    key={imgIndex}
-                    source={{ uri: mediaUrl }} 
-                    style={styles.postImage}
-                    onError={(error) => console.error('❌ Image failed to load:', mediaUrl, error)}
-                    onLoad={() => console.log('✅ Image loaded successfully:', mediaUrl)}
-                  />
+                  <TouchableOpacity key={`image-${imgIndex}`} onPress={handlePostPress}>
+                    <Image 
+                      source={{ uri: mediaUrl }} 
+                      style={styles.postImage}
+                      onError={(error) => console.error('❌ Image failed to load:', mediaUrl, error)}
+                      onLoad={() => console.log('✅ Image loaded successfully:', mediaUrl)}
+                    />
+                  </TouchableOpacity>
                 );
               }
             })}
@@ -309,7 +434,7 @@ export default function PostCard({ post, index = 0, isVisible = true }: PostCard
               ))}
             </View>
           )}
-        </TouchableOpacity>
+        </View>
       ) : (
         <View style={styles.noImageContainer}>
           <Text style={styles.noImageText}>No images to display</Text>
@@ -632,5 +757,34 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoContainer: {
+    position: 'relative',
+  },
+  videoWrapper: {
+    position: 'relative',
+  },
+  videoTapArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    backgroundColor: 'transparent',
+  },
+  customControls: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    zIndex: 8,
+  },
+  playPauseButton: {
+    padding: 20,
   },
 });
