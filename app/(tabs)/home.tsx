@@ -199,15 +199,67 @@ export default function HomeScreen() {
     extrapolate: 'clamp',
   });
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [1, 0.95],
-    extrapolate: 'clamp',
-  });
 
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -10],
+  });
+
+  const storyBarTranslateY = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, -150],
+    extrapolate: 'clamp',
+  });
+
+  const storyBarOpacity = scrollY.interpolate({
+    inputRange: [0, 50, 100],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Background parallax animations
+  const backgroundParallax1 = scrollY.interpolate({
+    inputRange: [0, 300],
+    outputRange: [0, -50],
+    extrapolate: 'clamp',
+  });
+
+  const backgroundParallax2 = scrollY.interpolate({
+    inputRange: [0, 400],
+    outputRange: [0, 80],
+    extrapolate: 'clamp',
+  });
+
+  const backgroundParallax3 = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [0, -30],
+    extrapolate: 'clamp',
+  });
+
+  const backgroundScale = scrollY.interpolate({
+    inputRange: [0, 500],
+    outputRange: [1, 1.2],
+    extrapolate: 'clamp',
+  });
+
+  // Header scroll animations
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, 150],
+    outputRange: [0, -100],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100, 150],
+    outputRange: [1, 0.7, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Main background scroll animation
+  const backgroundTranslateY = scrollY.interpolate({
+    inputRange: [0, 400],
+    outputRange: [0, -100],
+    extrapolate: 'clamp',
   });
 
   const getGreeting = () => {
@@ -221,109 +273,198 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Dynamic Floating Background */}
-      <View style={styles.backgroundContainer}>
+      {/* Avant-garde Morphing Background */}
+      <Animated.View 
+        style={[
+          styles.backgroundContainer,
+          {
+            transform: [{ translateY: backgroundTranslateY }],
+          }
+        ]}
+      >
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={['#0f0f23', '#1a1a2e', '#16213e']}
           style={StyleSheet.absoluteFillObject}
         />
+        
+        {/* Flowing Geometric Shapes */}
         <Animated.View 
           style={[
-            styles.floatingOrb1,
-            { transform: [{ translateY: floatingY }] }
+            styles.morphShape1,
+            { 
+              transform: [
+                { translateY: Animated.add(floatingY, backgroundParallax1) },
+                { scale: backgroundScale },
+                { rotate: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg'],
+                }) }
+              ] 
+            }
           ]}
         />
         <Animated.View 
           style={[
-            styles.floatingOrb2,
-            { transform: [{ translateY: floatingAnimation.interpolate({
-              inputRange: [0, 1],
-              outputRange: [10, -5],
-            }) }] }
+            styles.morphShape2,
+            { 
+              transform: [
+                { translateX: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 20],
+                }) },
+                { translateY: backgroundParallax2 },
+                { scale: Animated.multiply(
+                  floatingAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.2],
+                  }),
+                  backgroundScale
+                )}
+              ] 
+            }
           ]}
         />
         <Animated.View 
           style={[
-            styles.floatingOrb3,
-            { transform: [{ translateY: floatingAnimation.interpolate({
-              inputRange: [0, 1],
-              outputRange: [-5, 15],
-            }) }] }
+            styles.morphShape3,
+            { 
+              transform: [
+                { translateY: Animated.add(
+                  floatingAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [15, -15],
+                  }),
+                  backgroundParallax3
+                )},
+                { scale: backgroundScale },
+                { rotate: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['360deg', '0deg'],
+                }) }
+              ] 
+            }
           ]}
         />
-      </View>
-
-      {/* Artistic AL-Fayda Logo Header */}
-      <View style={styles.logoHeader}>
+        
+        {/* Mesh Gradient Overlay */}
         <LinearGradient
-          colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
-          style={styles.logoBackground}
+          colors={['rgba(255,107,107,0.1)', 'transparent', 'rgba(78,205,196,0.1)']}
+          style={StyleSheet.absoluteFillObject}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>AL-Fayda</Text>
-            <View style={styles.logoUnderline}>
-              <LinearGradient
-                colors={['#FF6B6B', '#4ECDC4', '#45B7D1']}
-                style={styles.logoGradientLine}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
+        />
+      </Animated.View>
+
+      {/* Futuristic Header Design */}
+      <Animated.View 
+        style={[
+          styles.futuristicHeader,
+          {
+            transform: [{ translateY: headerTranslateY }],
+            opacity: headerOpacity,
+          }
+        ]}
+      >
+        <BlurView intensity={20} style={styles.headerBlurContainer}>
+          <View style={styles.headerContent}>
+            <View style={styles.brandSection}>
+              <View style={styles.brandIcon}>
+                <LinearGradient
+                  colors={['#FF6B6B', '#4ECDC4']}
+                  style={styles.brandIconGradient}
+                >
+                  <Text style={styles.brandInitial}>A</Text>
+                </LinearGradient>
+              </View>
+              <View style={styles.brandTextContainer}>
+                <Text style={styles.brandName}>AL-Fayda</Text>
+                <Text style={styles.brandSubtitle}>{getGreeting()}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.searchButton}>
+                <BlurView intensity={30} style={styles.actionButtonBlur}>
+                  <Ionicons name="search" size={20} color="white" />
+                </BlurView>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.notificationButton}>
+                <BlurView intensity={30} style={styles.actionButtonBlur}>
+                  <Ionicons name="notifications" size={20} color="white" />
+                  <View style={styles.notificationDot} />
+                </BlurView>
+              </TouchableOpacity>
             </View>
           </View>
-        </LinearGradient>
-      </View>
+        </BlurView>
+      </Animated.View>
 
 
 
-      {/* Immersive Story Experience */}
-      <View style={[styles.storySection, { paddingTop: 60 }]}>
+      {/* Neo-Morphic Story Constellation */}
+      <Animated.View 
+        style={[
+          styles.storyConstellation,
+          {
+            transform: [{ translateY: storyBarTranslateY }],
+            opacity: storyBarOpacity,
+          }
+        ]}
+      >
+        {/* Story Bar Background */}
+        <View style={styles.storyBarBackground}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+            style={styles.storyBarGradient}
+          />
+        </View>
+        
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.storiesContent, { paddingTop: 5 }]}
-          style={styles.storiesScroll}
+          contentContainerStyle={styles.storyConstellationContent}
+          style={styles.storyConstellationScroll}
         >
-          {/* Add Your Story */}
+          {/* Create Story Portal */}
           <TouchableOpacity 
-            style={styles.addStoryCard}
+            style={styles.createStoryPortal}
             onPress={() => router.push('/create-story')}
           >
-            <LinearGradient
-              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
-              style={styles.addStoryGradient}
-            >
-              {/* Current User Avatar at top */}
-              {profile && (
-                <View style={styles.addStoryUserContainer}>
-                  {profile.avatar ? (
-                    <Image 
-                      source={{ uri: profile.avatar }} 
-                      style={styles.addStoryUserImage} 
-                    />
-                  ) : (
-                    <View style={[styles.addStoryUserImage, styles.addStoryUserImageDefault]}>
-                      <Text style={styles.addStoryUserInitials}>
-                        {(profile.name || profile.username || 'U').slice(0, 1).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+            <BlurView intensity={25} style={styles.portalBlur}>
+              <LinearGradient
+                colors={['rgba(255,107,107,0.3)', 'rgba(78,205,196,0.3)']}
+                style={styles.portalGradient}
+              >
+                {profile && (
+                  <View style={styles.portalUserAvatar}>
+                    {profile.avatar ? (
+                      <Image 
+                        source={{ uri: profile.avatar }} 
+                        style={styles.portalAvatarImage} 
+                      />
+                    ) : (
+                      <View style={[styles.portalAvatarImage, styles.portalAvatarDefault]}>
+                        <Text style={styles.portalAvatarText}>
+                          {(profile.name || profile.username || 'U').slice(0, 1).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+                <View style={styles.portalPlusIcon}>
+                  <Ionicons name="add" size={16} color="white" />
                 </View>
-              )}
-              
-              <Ionicons name="add" size={20} color="white" />
-              <Text style={styles.addStoryText}>Your Story</Text>
-            </LinearGradient>
+                <Text style={styles.portalText}>Create</Text>
+              </LinearGradient>
+            </BlurView>
           </TouchableOpacity>
           
-          {/* User Stories */}
+          {/* Story Orbs */}
           {groupedStories.map((storyGroup, index) => (
             <TouchableOpacity 
               key={storyGroup.user_id} 
-              style={styles.storyContainer}
+              style={styles.storyOrb}
               onPress={() => {
-                // Mark all stories from this user as viewed
                 storyGroup.stories.forEach((story: any) => {
                   setViewedStories(prev => new Set([...prev, story.id]));
                 });
@@ -344,78 +485,52 @@ export default function HomeScreen() {
                 });
               }}
             >
-              <View style={styles.storyCircle}>
-                {/* Gradient Border */}
+              <View style={styles.orbContainer}>
                 <LinearGradient
                   colors={storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
                           storyGroup.stories.every((s: any) => viewedStories.has(s.id))
-                    ? ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.3)'] // All viewed: subtle gray
-                    : ['#E91E63', '#F06292', '#9C27B0', '#BA68C8'] // Has unviewed: elegant pink-purple gradient
+                    ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']
+                    : ['#FF6B6B', '#4ECDC4']
                   }
-                  style={[
-                    styles.storyGradientBorder,
-                    (storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
-                     storyGroup.stories.every((s: any) => viewedStories.has(s.id))) 
-                      ? styles.viewedStoryBorder : styles.unviewedStoryBorder
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  style={styles.orbGradientRing}
                 >
-                  <View style={styles.storyImageWrapper}>
+                  <BlurView intensity={20} style={styles.orbImageContainer}>
                     <Image 
                       source={{ uri: getStoryMediaUrl(storyGroup.media_url) || storyGroup.media_url }} 
-                      style={styles.storyCircularImage} 
+                      style={styles.orbImage} 
                     />
-                  </View>
+                  </BlurView>
                 </LinearGradient>
                 
-                {/* User Avatar Overlay */}
-                {(() => {
-                  const avatarUrl = getAvatarUrl(storyGroup.user?.avatar);
-                  return (
-                    <View style={styles.storyAvatarOverlay}>
-                      {avatarUrl ? (
-                        <Image 
-                          source={{ uri: avatarUrl }} 
-                          style={styles.storyUserAvatar} 
-                        />
-                      ) : (
-                        <View style={[styles.storyUserAvatar, styles.storyDefaultAvatar]}>
-                          <Text style={styles.storyInitialsText}>
-                            {(storyGroup.user?.name || storyGroup.user?.username || 'U').slice(0, 1).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })()}
-                
-                {/* Multiple Stories Indicator */}
                 {storyGroup.story_count > 1 && (
-                  <View style={styles.multipleStoriesIndicator}>
-                    <Text style={styles.multipleStoriesText}>{storyGroup.story_count}</Text>
+                  <View style={styles.orbMultiIndicator}>
+                    <Text style={styles.orbMultiText}>{storyGroup.story_count}</Text>
                   </View>
                 )}
               </View>
               
-              <Text style={styles.storyUsername} numberOfLines={1}>
+              <Text style={styles.orbUsername} numberOfLines={1}>
                 {storyGroup.user?.username || storyGroup.user?.name}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
+      </Animated.View>
 
-      {/* Revolutionary Card Stack Feed */}
+      {/* Immersive Content Flow */}
       <Animated.FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item, index }) => (
-          <PostCard 
-            post={item} 
-            index={index} 
-            isVisible={isScreenFocused && visiblePosts.has(item.id.toString())}
-          />
+          <View style={styles.contentCardWrapper}>
+            <BlurView intensity={15} style={styles.contentCardBlur}>
+              <PostCard 
+                post={item} 
+                index={index} 
+                isVisible={isScreenFocused && visiblePosts.has(item.id.toString())}
+              />
+            </BlurView>
+          </View>
         )}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -428,35 +543,42 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="white"
-            colors={['#667eea', '#764ba2']}
+            tintColor="#FF6B6B"
+            colors={['#FF6B6B', '#4ECDC4']}
           />
         }
-        contentContainerStyle={styles.feedContainer}
+        contentContainerStyle={styles.immersiveFeedContainer}
         showsVerticalScrollIndicator={false}
-        style={styles.feedList}
+        style={styles.immersiveFeedList}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No posts yet</Text>
-              <Text style={styles.emptySubtext}>Be the first to share something!</Text>
-            </View>
+            <BlurView intensity={20} style={styles.emptyStateContainer}>
+              <LinearGradient
+                colors={['rgba(255,107,107,0.2)', 'rgba(78,205,196,0.2)']}
+                style={styles.emptyStateGradient}
+              >
+                <Text style={styles.emptyStateText}>Your Canvas Awaits</Text>
+                <Text style={styles.emptyStateSubtext}>Be the first to paint this digital space</Text>
+              </LinearGradient>
+            </BlurView>
           ) : null
         }
       />
 
-      {/* Floating Action Hub */}
-      <View style={styles.floatingActionHub}>
+      {/* Quantum Floating Action Portal */}
+      <View style={styles.quantumActionPortal}>
         <TouchableOpacity 
-          style={styles.createButton}
+          style={styles.portalCreateButton}
           onPress={() => router.push('/create-post')}
         >
-          <LinearGradient
-            colors={['#FF6B6B', '#4ECDC4']}
-            style={styles.createButtonGradient}
-          >
-            <Ionicons name="add" size={32} color="white" />
-          </LinearGradient>
+          <BlurView intensity={30} style={styles.portalButtonBlur}>
+            <LinearGradient
+              colors={['#FF6B6B', '#4ECDC4']}
+              style={styles.portalButtonGradient}
+            >
+              <Ionicons name="add" size={28} color="white" />
+            </LinearGradient>
+          </BlurView>
         </TouchableOpacity>
       </View>
     </View>
@@ -466,57 +588,127 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: 'transparent',
   },
   backgroundContainer: {
     position: 'absolute',
     width: '100%',
-    height: '100%',
+    height: '120%',
+    top: -100,
     overflow: 'hidden',
+    zIndex: -10,
   },
-  floatingOrb1: {
+  
+  // Avant-garde Morphing Shapes
+  morphShape1: {
     position: 'absolute',
-    top: 60,
-    right: 30,
+    top: 80,
+    right: -40,
+    width: 160,
+    height: 160,
+    backgroundColor: 'rgba(255,107,107,0.08)',
+    borderRadius: 80,
+    transform: [{ skewX: '30deg' }],
+  },
+  morphShape2: {
+    position: 'absolute',
+    top: 250,
+    left: -60,
     width: 120,
-    height: 120,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    height: 200,
+    backgroundColor: 'rgba(78,205,196,0.06)',
     borderRadius: 60,
-    opacity: 0.8,
+    transform: [{ skewY: '45deg' }],
   },
-  floatingOrb2: {
+  morphShape3: {
     position: 'absolute',
-    top: 200,
-    left: -20,
-    width: 80,
-    height: 80,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 40,
-    opacity: 0.6,
+    bottom: 200,
+    right: 20,
+    width: 140,
+    height: 140,
+    backgroundColor: 'rgba(69,183,209,0.05)',
+    borderRadius: 70,
+    transform: [{ skewX: '-20deg' }],
   },
-  floatingOrb3: {
-    position: 'absolute',
-    bottom: 150,
-    right: 50,
-    width: 100,
-    height: 100,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 50,
-    opacity: 0.7,
-  },
-  topHeader: {
+  
+  // Futuristic Header
+  futuristicHeader: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 50,
+    zIndex: 10,
     paddingTop: 50,
-    paddingBottom: 15,
+    paddingBottom: 20,
   },
-  headerBlur: {
+  headerBlurContainer: {
     marginHorizontal: 20,
+    borderRadius: 25,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  brandSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  brandIcon: {
+    marginRight: 12,
+  },
+  brandIconGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandInitial: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  brandTextContainer: {
+    flex: 1,
+  },
+  brandName: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  brandSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  searchButton: {
     borderRadius: 20,
     overflow: 'hidden',
+  },
+  notificationButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  actionButtonBlur: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF6B6B',
   },
   headerContent: {
     flexDirection: 'row',
@@ -525,211 +717,121 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  greetingText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: '800',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 6,
-  },
-  headerSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  headerButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  headerButtonGradient: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+  
+  // Neo-Morphic Story Constellation
+  storyConstellation: {
+    marginTop: 140,
+    paddingHorizontal: 20,
+    marginBottom: 25,
     position: 'relative',
   },
-  notificationBadge: {
+  storyBarBackground: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#FF6B6B',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  messageBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#4ECDC4',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  storySection: {
-    marginTop: 30,
-    paddingHorizontal: 8,
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  storiesScroll: {
-    marginHorizontal: -4,
-  },
-  storiesContent: {
-    paddingHorizontal: 8,
-    paddingLeft: 4,
-    alignItems: 'center',
-  },
-  addStoryCard: {
-    marginLeft: 0,
-    marginRight: 6,
-    borderRadius: 16,
+    top: -10,
+    left: 0,
+    right: 0,
+    bottom: -10,
+    borderRadius: 25,
     overflow: 'hidden',
-    alignSelf: 'center',
-    marginTop: -24,
   },
-  addStoryGradient: {
-    width: 70,
-    height: 85,
+  storyBarGradient: {
+    flex: 1,
+    borderRadius: 25,
+  },
+  storyConstellationScroll: {
+    paddingHorizontal: 0,
+    zIndex: 1,
+  },
+  storyConstellationContent: {
+    paddingHorizontal: 0,
+    alignItems: 'center',
+  },
+  
+  // Create Story Portal
+  createStoryPortal: {
+    marginRight: 15,
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  portalBlur: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  portalGradient: {
+    width: 90,
+    height: 110,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 10,
   },
-  addStoryText: {
+  portalUserAvatar: {
+    marginBottom: 8,
+  },
+  portalAvatarImage: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.8)',
+  },
+  portalAvatarDefault: {
+    backgroundColor: 'rgba(255,107,107,0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portalAvatarText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  portalPlusIcon: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  portalText: {
     color: 'white',
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 6,
+    textAlign: 'center',
   },
-  storyContainer: {
+  
+  // Story Orbs
+  storyOrb: {
     alignItems: 'center',
-    marginHorizontal: 8,
-    width: 85,
+    marginHorizontal: 10,
+    width: 80,
   },
-  storyCircle: {
+  orbContainer: {
     position: 'relative',
     marginBottom: 8,
   },
-  storyGradientBorder: {
-    width: 85,
-    height: 85,
-    borderRadius: 42.5,
-    padding: 3.5,
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 10,
+  orbGradientRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  storyImageWrapper: {
+  orbImageContainer: {
     width: '100%',
     height: '100%',
-    borderRadius: 38.5,
+    borderRadius: 37,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  storyCircularImage: {
+  orbImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  storyAvatarOverlay: {
-    position: 'absolute',
-    bottom: -3,
-    right: -3,
-    backgroundColor: 'white',
-    borderRadius: 14,
-    padding: 2,
-    shadowColor: '#4ECDC4',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.9)',
-  },
-  storyUserAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  storyDefaultAvatar: {
-    backgroundColor: '#667eea',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyInitialsText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  storyUsername: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 6,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-    letterSpacing: 0.2,
-  },
-  unviewedStoryBorder: {
-    // Elegant shadow for unviewed stories
-    shadowColor: '#E91E63',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 18,
-    elevation: 12,
-  },
-  viewedStoryBorder: {
-    // Subtle shadow for viewed stories
-    shadowColor: 'rgba(255,255,255,0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  multipleStoriesIndicator: {
+  orbMultiIndicator: {
     position: 'absolute',
     top: -5,
     right: -5,
@@ -742,129 +844,103 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'white',
   },
-  multipleStoriesText: {
+  orbMultiText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+  },
+  orbUsername: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '600',
     textAlign: 'center',
+    opacity: 0.9,
   },
-  feedContainer: {
-    paddingBottom: 120,
-  },
-  feedList: {
-    flex: 1,
-    paddingTop: 0,
-  },
-  floatingActionHub: {
-    position: 'absolute',
-    bottom: 100,
-    right: 24,
-    alignItems: 'flex-end',
-    gap: 12,
-    zIndex: 100,
-  },
-  createButton: {
-    borderRadius: 28,
+  
+  // Immersive Content Flow
+  contentCardWrapper: {
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 25,
     overflow: 'hidden',
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    zIndex: 1000,
+    elevation: 20,
+    position: 'relative',
   },
-  createButtonGradient: {
-    width: 64,
-    height: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
+  contentCardBlur: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 25,
+    overflow: 'hidden',
   },
-  emptyContainer: {
+  immersiveFeedContainer: {
+    paddingBottom: 140,
+    paddingTop: 10,
+  },
+  immersiveFeedList: {
+    flex: 1,
+    zIndex: 999,
+    elevation: 18,
+    position: 'relative',
+  },
+  
+  // Empty State
+  emptyStateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 100,
     paddingHorizontal: 40,
+    marginHorizontal: 20,
+    borderRadius: 25,
+    overflow: 'hidden',
   },
-  emptyText: {
+  emptyStateGradient: {
+    padding: 40,
+    alignItems: 'center',
+    borderRadius: 25,
+  },
+  emptyStateText: {
     color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '800',
     textAlign: 'center',
     marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 6,
+    letterSpacing: 1,
   },
-  emptySubtext: {
+  emptyStateSubtext: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 22,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    opacity: 0.9,
   },
-  logoHeader: {
+  
+  // Quantum Floating Action Portal
+  quantumActionPortal: {
     position: 'absolute',
-    top: 50,
-    left: 20,
-    right: 20,
-    zIndex: 5,
-    alignItems: 'center',
+    bottom: 100,
+    right: 25,
+    zIndex: 9999,
   },
-  logoBackground: {
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+  portalCreateButton: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 50,
   },
-  logoContainer: {
-    alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: 'white',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-    fontFamily: 'System',
-  },
-  logoUnderline: {
-    marginTop: 2,
-    width: 60,
-    height: 2,
-    borderRadius: 1,
+  portalButtonBlur: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 30,
     overflow: 'hidden',
   },
-  logoGradientLine: {
-    flex: 1,
-    height: '100%',
-  },
-  addStoryUserContainer: {
-    marginBottom: 4,
-    alignItems: 'center',
-  },
-  addStoryUserImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-  },
-  addStoryUserImageDefault: {
-    backgroundColor: '#667eea',
+  portalButtonGradient: {
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  addStoryUserInitials: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+    borderRadius: 30,
   },
 });

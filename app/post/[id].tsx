@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
   // Layout
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0f0f23',
   },
   content: {
     flex: 1,
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   // Images Section
   imagesSection: {
     width,
-    height: width,
+    height: width * 0.75,
   },
   imageContainer: {
     width,
@@ -159,12 +159,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButton: {
-    marginRight: 20,
+    marginRight: 15,
   },
   actionButtonGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -174,10 +174,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 10,
   },
+  statsIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNumber: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   likesText: {
     color: 'white',
     fontWeight: '600',
-    marginBottom: 5,
   },
   statText: {
     color: 'rgba(255,255,255,0.8)',
@@ -433,38 +448,44 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   
-  // Background Orbs
-  backgroundOrbs: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: -1,
-  },
-  orb1: {
+  // Background Container
+  backgroundContainer: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 138, 0, 0.15)',
-    top: -100,
-    right: -100,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
   },
-  orb2: {
+  
+  // Avant-garde Morphing Shapes
+  morphShape1: {
     position: 'absolute',
-    width: 200,
+    top: 80,
+    right: -40,
+    width: 160,
+    height: 160,
+    backgroundColor: 'rgba(255,107,107,0.08)',
+    borderRadius: 80,
+    transform: [{ skewX: '30deg' }],
+  },
+  morphShape2: {
+    position: 'absolute',
+    top: 250,
+    left: -60,
+    width: 120,
     height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 0, 128, 0.1)',
-    bottom: -50,
-    left: -50,
+    backgroundColor: 'rgba(78,205,196,0.06)',
+    borderRadius: 60,
+    transform: [{ skewY: '45deg' }],
   },
-  orb3: {
+  morphShape3: {
     position: 'absolute',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: 'rgba(0, 200, 255, 0.1)',
-    top: '30%',
-    left: '50%',
-    marginLeft: -200,
+    bottom: 200,
+    right: 20,
+    width: 140,
+    height: 140,
+    backgroundColor: 'rgba(69,183,209,0.05)',
+    borderRadius: 70,
+    transform: [{ skewX: '-20deg' }],
   },
   
   // Header Styles
@@ -538,9 +559,9 @@ const styles = StyleSheet.create({
   
   // Save Button
   saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   saveButtonGradient: {
@@ -781,6 +802,8 @@ export default function PostDetailScreen() {
   const [isLiked, setIsLiked] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [likesCount, setLikesCount] = useState<number>(0);
+  const [savesCount, setSavesCount] = useState<number>(0);
+  const [viewsCount, setViewsCount] = useState<number>(0);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -855,6 +878,8 @@ export default function PostDetailScreen() {
       
       setPost(postData);
       setLikesCount(Array.isArray(postData.likes) ? postData.likes.length : 0);
+      setSavesCount(postData.saves_count || 0);
+      setViewsCount(postData.views_count || 0);
       setIsLiked(false);
       setIsSaved(false);
       
@@ -1142,6 +1167,7 @@ export default function PostDetailScreen() {
 
   const handleSave = () => {
     setIsSaved(!isSaved);
+    setSavesCount(isSaved ? savesCount - 1 : savesCount + 1);
   };
 
   const handleUserPress = () => {
@@ -1275,27 +1301,70 @@ export default function PostDetailScreen() {
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Full Page Background Gradient */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
-        style={StyleSheet.absoluteFillObject}
-      />
-      
-      {/* Background Floating Orbs */}
-      <View style={styles.backgroundOrbs}>
-        <Animated.View style={[styles.orb1, { transform: [{ translateY: floatingY }] }]} />
-        <Animated.View style={[styles.orb2, { 
-          transform: [{ translateY: floatingAnimation.interpolate({
-            inputRange: [0, 1],
-            outputRange: [10, -5],
-          }) }] 
-        }]} />
-        <Animated.View style={[styles.orb3, { 
-          transform: [{ translateY: floatingAnimation.interpolate({
-            inputRange: [0, 1],
-            outputRange: [-5, 15],
-          }) }] 
-        }]} />
+      {/* Avant-garde Morphing Background */}
+      <View style={styles.backgroundContainer}>
+        <LinearGradient
+          colors={['#0f0f23', '#1a1a2e', '#16213e']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        
+        {/* Flowing Geometric Shapes */}
+        <Animated.View 
+          style={[
+            styles.morphShape1,
+            { 
+              transform: [
+                { translateY: floatingY },
+                { rotate: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg'],
+                }) }
+              ] 
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.morphShape2,
+            { 
+              transform: [
+                { translateX: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 20],
+                }) },
+                { scale: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 1.2],
+                }) }
+              ] 
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.morphShape3,
+            { 
+              transform: [
+                { translateY: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [15, -15],
+                }) },
+                { rotate: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['360deg', '0deg'],
+                }) }
+              ] 
+            }
+          ]}
+        />
+        
+        {/* Mesh Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(255,107,107,0.1)', 'transparent', 'rgba(78,205,196,0.1)']}
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
       </View>
 
       {/* Header */}
@@ -1401,7 +1470,7 @@ export default function PostDetailScreen() {
                 >
                   <Ionicons 
                     name={isLiked ? "heart" : "heart-outline"} 
-                    size={24} 
+                    size={18} 
                     color="white" 
                   />
                 </LinearGradient>
@@ -1413,7 +1482,7 @@ export default function PostDetailScreen() {
                 colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
                 style={styles.actionButtonGradient}
               >
-                <Ionicons name="chatbubble-outline" size={22} color="white" />
+                <Ionicons name="chatbubble-outline" size={18} color="white" />
               </LinearGradient>
             </TouchableOpacity>
             
@@ -1422,7 +1491,7 @@ export default function PostDetailScreen() {
                 colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
                 style={styles.actionButtonGradient}
               >
-                <Ionicons name="paper-plane-outline" size={22} color="white" />
+                <Ionicons name="paper-plane-outline" size={18} color="white" />
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -1434,7 +1503,7 @@ export default function PostDetailScreen() {
             >
               <Ionicons 
                 name={isSaved ? "bookmark" : "bookmark-outline"} 
-                size={22} 
+                size={18} 
                 color="white" 
               />
             </LinearGradient>
@@ -1443,11 +1512,28 @@ export default function PostDetailScreen() {
 
         {/* Post Stats */}
         <Animated.View style={[styles.statsSection, { opacity: fadeAnimation }]}>
-          <Text style={styles.likesText}>{likesCount.toLocaleString()} likes</Text>
-          {post?.shares_count ? (
-            <Text style={styles.statText}>{post.shares_count} shares</Text>
-          ) : null}
-          <Text style={styles.statText}>{comments.length} comments</Text>
+          <View style={styles.statsIconRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="heart" size={16} color="#FF6B6B" />
+              <Text style={styles.statNumber}>{likesCount.toLocaleString()}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="chatbubble" size={16} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.statNumber}>{comments.length}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="eye" size={16} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.statNumber}>{viewsCount.toLocaleString()}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="paper-plane" size={16} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.statNumber}>{post?.shares_count?.toLocaleString() || 0}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="bookmark" size={16} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.statNumber}>{savesCount.toLocaleString()}</Text>
+            </View>
+          </View>
         </Animated.View>
 
         {/* Caption */}

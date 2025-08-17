@@ -63,6 +63,9 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes);
+  const [savesCount, setSavesCount] = useState(post.saves || 0);
+  const [viewsCount, setViewsCount] = useState(Math.floor(Math.random() * 5000) + 100); // Mock views
+  const [commentsCount, setCommentsCount] = useState(post.comments?.length || 0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
@@ -171,7 +174,10 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
   };
 
-  const handleSave = () => setIsSaved(!isSaved);
+  const handleSave = () => {
+    setIsSaved(!isSaved);
+    setSavesCount(prev => isSaved ? prev - 1 : prev + 1);
+  };
   const handleUserPress = () => router.push(`/(tabs)/profile?userId=${post.user.id}`);
   const handlePostPress = () => router.push(`/post/${post.id}`);
 
@@ -385,7 +391,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
                 colors={isLiked ? ['#EF4444', '#DC2626'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
                 style={styles.actionButtonGradient}
               >
-                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color="white" />
+                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={18} color="white" />
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -394,7 +400,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
               style={styles.actionButtonGradient}
             >
-              <Ionicons name="chatbubble-outline" size={22} color="white" />
+              <Ionicons name="chatbubble-outline" size={18} color="white" />
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
@@ -402,7 +408,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
               style={styles.actionButtonGradient}
             >
-              <Ionicons name="paper-plane-outline" size={22} color="white" />
+              <Ionicons name="paper-plane-outline" size={18} color="white" />
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -411,14 +417,39 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
             colors={isSaved ? ['#3B82F6', '#2563EB'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
             style={styles.saveButtonGradient}
           >
-            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={22} color="white" />
+            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color="white" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
 
-      {/* Stats & Caption */}
+      {/* Stats */}
+      <View style={styles.statsSection}>
+        <View style={styles.statsIconRow}>
+          <View style={styles.statItem}>
+            <Ionicons name="heart" size={16} color="#FF6B6B" />
+            <Text style={styles.statNumber}>{likesCount.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="chatbubble" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.statNumber}>{commentsCount}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="eye" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.statNumber}>{viewsCount.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="paper-plane" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.statNumber}>{post.shares?.toLocaleString() || 0}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="bookmark" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.statNumber}>{savesCount.toLocaleString()}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Caption */}
       <View style={styles.captionSection}>
-        <Text style={styles.likesText}>{`${likesCount.toLocaleString()} likes`}</Text>
         <Text style={styles.captionText} numberOfLines={2}>
           <Text style={styles.authorName} onPress={handleUserPress}>
             {post.user.username}
@@ -441,6 +472,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginHorizontal: 0,
     overflow: 'hidden',
+    zIndex: 1002,
+    elevation: 25,
+    position: 'relative',
   },
   header: {
     flexDirection: 'row',
@@ -503,7 +537,7 @@ const styles = StyleSheet.create({
   imageScrollView: {},
   postImage: {
     width: width,
-    height: width,
+    height: width * 0.75,
     borderRadius: 0,
     marginHorizontal: 0,
   },
@@ -533,19 +567,19 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   actionButton: {
-    marginRight: 20,
+    marginRight: 15,
   },
   actionButtonGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   saveButtonGradient: {
@@ -553,8 +587,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statsRow: {
-    paddingHorizontal: 16,
+  statsSection: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  statsIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNumber: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   likesText: {
     fontWeight: '600',
