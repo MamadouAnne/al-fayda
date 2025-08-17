@@ -6,7 +6,9 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { postsApi, usersApi } from '@/lib/api';
+import { getPostImageUrls } from '@/lib/supabase';
 import PostCard from '@/components/feed/PostCard';
+import CompactPostCard from '@/components/feed/CompactPostCard';
 // Avatar URLs are stored directly in database - no utility function needed
 
 // Helper function to check if URL is a video
@@ -23,6 +25,7 @@ export default function ProfileScreen() {
   const { profile: currentUser, signOut, session, loading: isLoading, refreshProfile } = useAuth();
   
   const [selectedTab, setSelectedTab] = useState('posts');
+  const tabAnimation = useRef(new Animated.Value(0)).current;
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,26 +49,38 @@ export default function ProfileScreen() {
     const scrollPosition = event.nativeEvent.contentOffset.y;
     const windowHeight = Dimensions.get('window').height;
     
-    // Calculate which post is most visible based on scroll position
+    // For compact grid layout, we need different calculation
     // Profile header is approximately 620px (profile + stats + tabs)
     const profileHeaderHeight = 620;
-    const postHeight = 600; // Approximate height of each post card
+    
+    // For compact cards in 2-column grid - updated for side-by-side layout
+    const padding = 40;
+    const gap = 12;
+    const cardsPerRow = width > 500 ? 3 : 2;
+    const cardWidth = cardsPerRow === 3 
+      ? (width - padding - (2 * gap)) / 3 
+      : (width - padding - gap) / 2;
+    const cardHeight = cardWidth * 1.6 + 16; // Updated aspect ratio + margin
+    const rowHeight = cardHeight;
     
     // Adjust scroll position to account for profile header
     const adjustedScrollPosition = Math.max(0, scrollPosition - profileHeaderHeight);
     
-    // Calculate which post should be visible
-    let newVisibleIndex = 0;
+    // Calculate which row is most visible
+    let visibleRowIndex = 0;
     if (adjustedScrollPosition > 0) {
-      newVisibleIndex = Math.floor((adjustedScrollPosition + windowHeight / 2) / postHeight);
-      newVisibleIndex = Math.max(0, Math.min(newVisibleIndex, memoizedPosts.length - 1));
+      visibleRowIndex = Math.floor((adjustedScrollPosition + windowHeight / 3) / rowHeight);
+      visibleRowIndex = Math.max(0, Math.min(visibleRowIndex, Math.ceil(memoizedPosts.length / cardsPerRow) - 1));
     }
     
+    // Convert row index to post index (first post in the visible row)
+    const newVisibleIndex = Math.min(visibleRowIndex * cardsPerRow, memoizedPosts.length - 1);
+    
     if (newVisibleIndex !== visiblePostIndex) {
-      console.log(`📱 Scroll visibility changed from post ${visiblePostIndex} to ${newVisibleIndex} (scroll: ${scrollPosition}, adjusted: ${adjustedScrollPosition})`);
+      console.log(`📱 Scroll visibility changed from post ${visiblePostIndex} to ${newVisibleIndex} (scroll: ${scrollPosition}, row: ${visibleRowIndex})`);
       setVisiblePostIndex(newVisibleIndex);
     }
-  }, [selectedTab, memoizedPosts, visiblePostIndex]);
+  }, [selectedTab, memoizedPosts, visiblePostIndex, width]);
 
   // Avatar sync not needed - following senecom approach with direct URL usage
 
@@ -86,7 +101,7 @@ export default function ProfileScreen() {
         const postId = post?.id ? String(post.id) : String(index);
         const numericId = post?.id ? parseInt(String(post.id).slice(-8), 16) || (index + 1) : (index + 1);
         
-        return {
+        const transformedPost = {
           id: numericId,
           user: {
             id: parseInt(String(currentUser.id)) || 1,
@@ -96,17 +111,27 @@ export default function ProfileScreen() {
             verified: Boolean(currentUser.verified),
             location: currentUser.location ? String(currentUser.location) : undefined
           },
-          images: Array.isArray(post?.images) ? post.images : [],
+          images: getPostImageUrls(post?.images) || [],
           caption: String(post?.content || ''),
           likes: Number(post?.likes_count) || 0,
           comments: [],
           shares: Number(post?.shares_count) || 0,
           saves: Number(post?.saves_count) || 0,
+          views: Number(post?.views_count) || Math.floor(Math.random() * 1000) + 50, // Mock views for now
           timestamp: post?.created_at ? String(new Date(post.created_at).toLocaleDateString()) : 'Today',
           location: post?.location ? String(post.location) : undefined,
           tags: [],
           originalId: postId
         };
+        
+        console.log(`📊 Transformed post ${numericId}:`, {
+          originalImages: post?.images,
+          processedImages: getPostImageUrls(post?.images),
+          transformedImages: transformedPost.images,
+          hasImages: transformedPost.images.length > 0
+        });
+        
+        return transformedPost;
       }) : [];
       
       setUserPosts(transformedPosts);
@@ -149,16 +174,19 @@ export default function ProfileScreen() {
     if (selectedTab === 'posts' && memoizedPosts.length > 0) {
       console.log(`📱 Setting visible post index to 0 for posts tab`);
       setVisiblePostIndex(0);
+    } else if (selectedTab !== 'posts') {
+      // Stop all videos when not on posts tab
+      setVisiblePostIndex(-1);
     }
   }, [selectedTab, memoizedPosts.length]);
 
-  // Also set visible post when screen gains focus and we're on posts tab
+  // Set visible post when screen gains focus and we're on posts tab
   useEffect(() => {
-    if (isScreenFocused && selectedTab === 'posts' && memoizedPosts.length > 0 && visiblePostIndex === -1) {
+    if (isScreenFocused && selectedTab === 'posts' && memoizedPosts.length > 0) {
       console.log(`📱 Screen focused - setting visible post index to 0`);
       setVisiblePostIndex(0);
     }
-  }, [isScreenFocused, selectedTab, memoizedPosts.length, visiblePostIndex]);
+  }, [isScreenFocused, selectedTab, memoizedPosts.length]);
 
   // Debug visibility state
   useEffect(() => {
@@ -336,27 +364,47 @@ export default function ProfileScreen() {
     }
 
     return (
-      <View style={styles.feedContainer}>
+      <View style={styles.compactGrid}>
         {memoizedPosts.map((post, index) => {
-          const isPostVisible = isScreenFocused && selectedTab === 'posts' && index === visiblePostIndex;
-          console.log(`📱 Post ${index} visibility: isScreenFocused=${isScreenFocused}, selectedTab=${selectedTab}, visiblePostIndex=${visiblePostIndex}, index=${index}, isVisible=${isPostVisible}`);
+          // For grid layout, make the first few posts in the visible area eligible for video playback
+          const cardsPerRow = width > 500 ? 3 : 2;
+          const currentRow = Math.floor(index / cardsPerRow);
+          const visibleRow = Math.floor(visiblePostIndex / cardsPerRow);
+          
+          // A post is visible if it's in the current visible row or the next row
+          const isInVisibleArea = currentRow >= visibleRow && currentRow <= visibleRow + 1;
+          const isPostVisible = isScreenFocused && selectedTab === 'posts' && isInVisibleArea && index === visiblePostIndex;
+          
+          console.log(`📱 Post ${index} visibility: row=${currentRow}, visibleRow=${visibleRow}, isInArea=${isInVisibleArea}, isVisible=${isPostVisible}`);
+          
+          // Calculate proper spacing for side-by-side layout
+          const isRightColumn = cardsPerRow === 2 ? index % 2 === 1 : index % 3 === 2;
+          const isMiddleColumn = cardsPerRow === 3 && index % 3 === 1;
           
           return (
             <View 
               key={`profile-post-${post.originalId || post.id}`}
               ref={(ref) => { postRefs.current[index] = ref; }}
+              style={[
+                styles.compactCardWrapper,
+                {
+                  marginRight: isRightColumn ? 0 : (cardsPerRow === 3 ? 6 : 12),
+                  marginLeft: cardsPerRow === 3 && isMiddleColumn ? 6 : 0
+                }
+              ]}
             >
-              <PostCard 
+              <CompactPostCard 
                 post={post} 
                 index={index}
                 isVisible={isPostVisible}
+                onPress={() => router.push(`/post/${post.originalId || post.id}`)}
               />
             </View>
           );
         })}
       </View>
     );
-  }, [memoizedPosts, selectedTab, visiblePostIndex, isScreenFocused]);
+  }, [memoizedPosts, selectedTab, visiblePostIndex, isScreenFocused, router]);
 
   const renderPostGrid = () => {
     if (userPosts.length === 0) {
@@ -378,40 +426,31 @@ export default function ProfileScreen() {
     }
 
     return (
-      <View style={styles.postsGrid}>
-        {userPosts.map((post) => (
-          <TouchableOpacity 
-            key={post.id}
-            style={styles.postItem}
-            onPress={() => router.push(`/post/${post.originalId || post.id}`)}
-          >
-            <Image source={{ uri: post.images[0] }} style={styles.postImage} />
-            {/* Video indicator */}
-            {post.images[0] && isVideoUrl(post.images[0]) && (
-              <View style={styles.videoIcon}>
-                <Ionicons name="play-circle" size={24} color="white" />
-              </View>
-            )}
-            {/* Multiple images indicator */}
-            {post.images?.length > 1 && (
-              <View style={styles.multipleIcon}>
-                <Ionicons name="copy" size={16} color="white" />
-              </View>
-            )}
-            <View style={styles.postOverlay}>
-              <View style={styles.postStats}>
-                <View style={styles.statItem}>
-                  <Ionicons name="heart" size={16} color="white" />
-                  <Text style={styles.statText}>{post.likes}</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Ionicons name="chatbubble" size={16} color="white" />
-                  <Text style={styles.statText}>{post.comments?.length || 0}</Text>
-                </View>
-              </View>
+      <View style={styles.compactGrid}>
+        {userPosts.map((post, index) => {
+          const cardsPerRow = width > 500 ? 3 : 2;
+          const isRightColumn = cardsPerRow === 2 ? index % 2 === 1 : index % 3 === 2;
+          const isMiddleColumn = cardsPerRow === 3 && index % 3 === 1;
+          
+          return (
+            <View 
+              key={post.id} 
+              style={[
+                styles.compactCardWrapper,
+                {
+                  marginRight: isRightColumn ? 0 : (cardsPerRow === 3 ? 6 : 12),
+                  marginLeft: cardsPerRow === 3 && isMiddleColumn ? 6 : 0
+                }
+              ]}
+            >
+              <CompactPostCard 
+                post={post}
+                isVisible={true} // Allow manual video playback in grid view
+                onPress={() => router.push(`/post/${post.originalId || post.id}`)}
+              />
             </View>
-          </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
     );
   };
@@ -598,8 +637,8 @@ export default function ProfileScreen() {
         <View style={styles.tabSection}>
           <View style={styles.tabContainer}>
             {[
-              { id: 'posts', label: 'Feed', icon: 'list-outline' },
-              { id: 'grid', label: 'Grid', icon: 'grid-outline' },
+              { id: 'posts', label: 'Cards', icon: 'apps-outline' },
+              { id: 'grid', label: 'Gallery', icon: 'grid-outline' },
               { id: 'saved', label: 'Saved', icon: 'bookmark-outline' }
             ].map((tab) => (
               <TouchableOpacity
@@ -609,6 +648,12 @@ export default function ProfileScreen() {
                   if (tab.id === 'posts') {
                     setVisiblePostIndex(0);
                   }
+                  // Animate tab transition
+                  Animated.timing(tabAnimation, {
+                    toValue: tab.id === 'posts' ? 0 : 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }).start();
                 }}
                 style={[styles.tab, selectedTab === tab.id && styles.activeTab]}
               >
@@ -626,10 +671,28 @@ export default function ProfileScreen() {
         </View>
 
         {/* Content */}
-        <View style={selectedTab === 'posts' ? styles.feedContentSection : styles.contentSection}>
+        <Animated.View 
+          style={[
+            selectedTab === 'posts' ? styles.feedContentSection : styles.contentSection,
+            {
+              opacity: tabAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1],
+                extrapolate: 'clamp',
+              }),
+              transform: [{
+                translateY: tabAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0],
+                  extrapolate: 'clamp',
+                })
+              }]
+            }
+          ]}
+        >
           {selectedTab === 'posts' && renderPostFeed()}
           {selectedTab === 'grid' && renderPostGrid()}
-        </View>
+        </Animated.View>
       </Animated.ScrollView>
     </View>
   );
@@ -926,6 +989,15 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     paddingHorizontal: 0,
+  },
+  compactGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    justifyContent: 'flex-start',
+  },
+  compactCardWrapper: {
+    marginBottom: 16,
   },
   postsGrid: {
     flexDirection: 'row',

@@ -88,6 +88,8 @@ export default function EditProfileScreen() {
   });
 
   const validateForm = () => {
+    console.log('=== VALIDATING FORM ===');
+    console.log('Form data being validated:', formData);
     const newErrors: {[key: string]: string} = {};
 
     if (!formData.name.trim()) {
@@ -102,14 +104,24 @@ export default function EditProfileScreen() {
       newErrors.username = 'Username can only contain letters, numbers, and underscores';
     }
 
-    if (formData.website && !formData.website.startsWith('http')) {
-      newErrors.website = 'Website must be a valid URL (starting with http:// or https://)';
+    // Auto-fix website URL if it doesn't start with http/https
+    if (formData.website && formData.website.trim()) {
+      const websiteValue = formData.website.trim();
+      if (!websiteValue.startsWith('http://') && !websiteValue.startsWith('https://')) {
+        // Auto-prepend https:// for user convenience
+        setFormData(prev => ({ 
+          ...prev, 
+          website: `https://${websiteValue}` 
+        }));
+      }
     }
 
     if (formData.phone && !/^[\+]?[1-9][\d]{0,15}$/.test(formData.phone.replace(/[\s\(\)-]/g, ''))) {
       newErrors.phone = 'Please enter a valid phone number';
     }
 
+    console.log('Validation errors found:', newErrors);
+    console.log('Validation passed:', Object.keys(newErrors).length === 0);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -159,7 +171,7 @@ export default function EditProfileScreen() {
           }
         }
         
-        const getContentType = (extension) => {
+        const getContentType = (extension: string) => {
           switch (extension.toLowerCase()) {
             case 'jpg':
             case 'jpeg':
@@ -174,7 +186,7 @@ export default function EditProfileScreen() {
         };
 
         // Create file name for upload
-        const fileExtension = asset.uri.split('.').pop();
+        const fileExtension = asset.uri.split('.').pop() || 'jpg';
         const fileName = `avatar_${currentUser?.id}_${new Date().getTime()}.${fileExtension}`;
         const contentType = getContentType(fileExtension);
         
@@ -241,52 +253,81 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
-    if (!validateForm()) return;
+    console.log('=== SAVE BUTTON CLICKED ===');
+    console.log('Form validation result:', validateForm());
+    
+    if (!validateForm()) {
+      console.log('Form validation failed, errors:', errors);
+      return;
+    }
 
     try {
       setLoading(true);
       console.log('=== SAVE PROCESS DEBUG ===');
+      console.log('Current user:', currentUser);
+      console.log('Form data:', formData);
       console.log('Current avatar state:', avatar);
       console.log('Current user avatar:', currentUser?.avatar);
       
       // Check if username is already taken (if changed)
       if (formData.username !== currentUser?.username) {
-        const { data: existingUser } = await supabase
+        console.log('Username changed, checking if available...');
+        const { data: existingUser, error: checkError } = await supabase
           .from('user_profiles')
           .select('id')
           .eq('username', formData.username)
           .neq('id', currentUser?.id)
           .single();
 
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('Error checking username:', checkError);
+          throw new Error('Failed to check username availability');
+        }
+
         if (existingUser) {
+          console.log('Username already taken:', existingUser);
           setErrors({ username: 'Username is already taken' });
           setLoading(false);
           return;
+        } else {
+          console.log('Username is available');
         }
       }
 
       // Update profile
-      console.log('Saving profile with avatar:', avatar);
-      const { error } = await supabase
+      console.log('Preparing to update profile...');
+      const updateData = {
+        name: formData.name.trim(),
+        username: formData.username.trim(),
+        bio: formData.bio.trim() || null,
+        location: formData.location.trim() || null,
+        website: formData.website.trim() || null,
+        profession: formData.profession.trim() || null,
+        phone: formData.phone.trim() || null,
+        interests: formData.interests.trim() || null,
+        education: formData.education.trim() || null,
+        experience: formData.experience.trim() || null,
+        skills: formData.skills.trim() || null,
+        avatar: avatar || null,
+        updated_at: new Date().toISOString(),
+      };
+      
+      console.log('Update data:', updateData);
+      console.log('Updating user with ID:', currentUser?.id);
+      
+      const { data, error } = await supabase
         .from('user_profiles')
-        .update({
-          name: formData.name.trim(),
-          username: formData.username.trim(),
-          bio: formData.bio.trim() || null,
-          location: formData.location.trim() || null,
-          website: formData.website.trim() || null,
-          profession: formData.profession.trim() || null,
-          phone: formData.phone.trim() || null,
-          interests: formData.interests.trim() || null,
-          education: formData.education.trim() || null,
-          experience: formData.experience.trim() || null,
-          skills: formData.skills.trim() || null,
-          avatar: avatar || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentUser?.id);
+        .update(updateData)
+        .eq('id', currentUser?.id)
+        .select();
 
-      if (error) throw error;
+      console.log('Update response - data:', data);
+      console.log('Update response - error:', error);
+
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
+      }
 
       console.log('Profile updated successfully, refreshing...');
       // Refresh the profile data
@@ -298,8 +339,18 @@ export default function EditProfileScreen() {
       ]);
 
     } catch (error: any) {
-      console.error('Error updating profile:', error);
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      console.error('=== ERROR UPDATING PROFILE ===');
+      console.error('Error type:', typeof error);
+      console.error('Error object:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error details:', error?.details);
+      console.error('Error hint:', error?.hint);
+      console.error('Error code:', error?.code);
+      
+      Alert.alert(
+        'Error', 
+        error?.message || error?.details || 'Failed to update profile. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -368,7 +419,7 @@ export default function EditProfileScreen() {
             </View>
             
             <TouchableOpacity 
-              onPress={handleSave} 
+              onPress={handleSave}
               style={[styles.saveButton, loading && styles.saveButtonDisabled]}
               disabled={loading}
             >
