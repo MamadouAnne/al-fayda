@@ -76,7 +76,10 @@ export default function UserProfileScreen() {
     setRefreshing(false);
   }, [loadUserData]);
 
+  // Note: All profile views now go through the unified profile tab instead of this page
+
   useEffect(() => {
+    // Load user data for any user since redirect logic has been removed
     loadUserData();
     
     // Entrance animation
@@ -101,7 +104,7 @@ export default function UserProfileScreen() {
         ])
       ),
     ]).start();
-  }, [loadUserData]);
+  }, [loadUserData, currentUser, id]);
 
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
@@ -126,7 +129,7 @@ export default function UserProfileScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          colors={['#667eea', '#764ba2']}
           style={StyleSheet.absoluteFillObject}
         />
         <View style={styles.errorContainer}>
@@ -319,7 +322,7 @@ export default function UserProfileScreen() {
       
       {/* Full Page Background Gradient */}
       <LinearGradient
-        colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+        colors={['#667eea', '#764ba2']}
         style={StyleSheet.absoluteFillObject}
       />
       
@@ -350,15 +353,11 @@ export default function UserProfileScreen() {
               </BlurView>
             </TouchableOpacity>
             
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>{user.username}</Text>
-            </View>
+            {/* No title for other users */}
+            <View style={styles.headerTitleContainer} />
             
-            <TouchableOpacity style={styles.moreButton}>
-              <BlurView intensity={20} tint="light" style={styles.moreButtonBlur}>
-                <Ionicons name="ellipsis-horizontal" size={24} color="white" />
-              </BlurView>
-            </TouchableOpacity>
+            {/* No action buttons for other users */}
+            <View style={styles.headerSpacer} />
           </View>
         </BlurView>
       </Animated.View>
@@ -662,6 +661,9 @@ const styles = StyleSheet.create({
   headerTitleContainer: {
     flex: 1,
     alignItems: 'center',
+  },
+  headerSpacer: {
+    width: 40, // Match the back button width for symmetry
   },
   headerTitle: {
     color: 'white',

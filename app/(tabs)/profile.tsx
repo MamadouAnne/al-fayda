@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, ScrollView, RefreshControl, Alert } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -22,9 +22,11 @@ const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { userId } = useLocalSearchParams<{ userId?: string }>();
   const { profile: currentUser, signOut, session, loading: isLoading, refreshProfile } = useAuth();
   
   const [selectedTab, setSelectedTab] = useState('posts');
+  const [viewedUser, setViewedUser] = useState<any>(null);
   const tabAnimation = useRef(new Animated.Value(0)).current;
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [, setLoading] = useState(true);
@@ -32,6 +34,10 @@ export default function ProfileScreen() {
   const [realCounts, setRealCounts] = useState<{followers_count: number, following_count: number} | null>(null);
   const [visiblePostIndex, setVisiblePostIndex] = useState(0);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  
+  // Determine if we're viewing the current user or another user
+  const isCurrentUser = !userId || userId === currentUser?.id;
+  const displayUser = isCurrentUser ? currentUser : viewedUser;
   
   // Memoize the posts list to prevent infinite re-renders
   const memoizedPosts = useMemo(() => userPosts.slice(0, 3), [userPosts]);
@@ -53,14 +59,13 @@ export default function ProfileScreen() {
     // Profile header is approximately 620px (profile + stats + tabs)
     const profileHeaderHeight = 620;
     
-    // For compact cards in 2-column grid - updated for side-by-side layout
-    const padding = 40;
-    const gap = 12;
+    // For compact cards in 2-column grid - with small gaps
+    const gap = 1; // Small gap between cards
     const cardsPerRow = width > 500 ? 3 : 2;
     const cardWidth = cardsPerRow === 3 
-      ? (width - padding - (2 * gap)) / 3 
-      : (width - padding - gap) / 2;
-    const cardHeight = cardWidth * 1.6 + 16; // Updated aspect ratio + margin
+      ? (width - (2 * gap)) / 3 
+      : (width - gap) / 2;
+    const cardHeight = cardWidth * 1.2 + 2; // Reduced aspect ratio + small margin
     const rowHeight = cardHeight;
     
     // Adjust scroll position to account for profile header
@@ -85,31 +90,38 @@ export default function ProfileScreen() {
   // Avatar sync not needed - following senecom approach with direct URL usage
 
   const loadUserData = useCallback(async () => {
-    if (!currentUser) return;
+    const targetUserId = userId || currentUser?.id;
+    if (!targetUserId) return;
     
     try {
       setLoading(true);
       
       // Load both posts and real user profile with updated counts
       const [posts, userProfile] = await Promise.all([
-        postsApi.getPostsByUser(currentUser.id, 20, 0),
-        usersApi.getUserProfile(currentUser.id)
+        postsApi.getPostsByUser(targetUserId, 20, 0),
+        usersApi.getUserProfile(targetUserId)
       ]);
+      
+      // Set the viewed user if it's not the current user
+      if (!isCurrentUser && userProfile) {
+        setViewedUser(userProfile);
+      }
       
       const transformedPosts = Array.isArray(posts) ? posts.map((post, index) => {
         // Ensure all values are properly defined and typed
         const postId = post?.id ? String(post.id) : String(index);
         const numericId = post?.id ? parseInt(String(post.id).slice(-8), 16) || (index + 1) : (index + 1);
         
+        const postUser = isCurrentUser ? currentUser : userProfile;
         const transformedPost = {
           id: numericId,
           user: {
-            id: parseInt(String(currentUser.id)) || 1,
-            name: String(currentUser.name || 'User'),
-            username: String(currentUser.username || 'user'),
-            avatar: currentUser.avatar || null,
-            verified: Boolean(currentUser.verified),
-            location: currentUser.location ? String(currentUser.location) : undefined
+            id: parseInt(String(postUser?.id)) || 1,
+            name: String(postUser?.name || 'User'),
+            username: String(postUser?.username || 'user'),
+            avatar: postUser?.avatar || null,
+            verified: Boolean(postUser?.verified),
+            location: postUser?.location ? String(postUser.location) : undefined
           },
           images: getPostImageUrls(post?.images) || [],
           caption: String(post?.content || ''),
@@ -149,7 +161,7 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.id]);
+  }, [userId, currentUser?.id, isCurrentUser]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -158,7 +170,7 @@ export default function ProfileScreen() {
   }, [loadUserData]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser || userId) {
       loadUserData();
     }
     
@@ -167,7 +179,7 @@ export default function ProfileScreen() {
       duration: 800,
       useNativeDriver: true,
     }).start();
-  }, [currentUser, loadUserData]);
+  }, [currentUser, userId, loadUserData]);
 
   // Reset visible post index when switching to posts tab
   useEffect(() => {
@@ -320,7 +332,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!session || !currentUser) {
+  if (!session || (!currentUser && isCurrentUser)) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -377,7 +389,7 @@ export default function ProfileScreen() {
           
           console.log(`📱 Post ${index} visibility: row=${currentRow}, visibleRow=${visibleRow}, isInArea=${isInVisibleArea}, isVisible=${isPostVisible}`);
           
-          // Calculate proper spacing for side-by-side layout
+          // Calculate small spacing between cards
           const isRightColumn = cardsPerRow === 2 ? index % 2 === 1 : index % 3 === 2;
           const isMiddleColumn = cardsPerRow === 3 && index % 3 === 1;
           
@@ -388,8 +400,9 @@ export default function ProfileScreen() {
               style={[
                 styles.compactCardWrapper,
                 {
-                  marginRight: isRightColumn ? 0 : (cardsPerRow === 3 ? 6 : 12),
-                  marginLeft: cardsPerRow === 3 && isMiddleColumn ? 6 : 0
+                  marginRight: isRightColumn ? 0 : 1,
+                  marginLeft: isMiddleColumn ? 0.5 : 0,
+                  marginBottom: 1,
                 }
               ]}
             >
@@ -428,9 +441,10 @@ export default function ProfileScreen() {
     return (
       <View style={styles.compactGrid}>
         {userPosts.map((post, index) => {
-          const cardsPerRow = width > 500 ? 3 : 2;
-          const isRightColumn = cardsPerRow === 2 ? index % 2 === 1 : index % 3 === 2;
-          const isMiddleColumn = cardsPerRow === 3 && index % 3 === 1;
+          // Calculate small spacing between cards
+          const gridCardsPerRow = width > 500 ? 3 : 2;
+          const isRightColumn = gridCardsPerRow === 2 ? index % 2 === 1 : index % 3 === 2;
+          const isMiddleColumn = gridCardsPerRow === 3 && index % 3 === 1;
           
           return (
             <View 
@@ -438,8 +452,9 @@ export default function ProfileScreen() {
               style={[
                 styles.compactCardWrapper,
                 {
-                  marginRight: isRightColumn ? 0 : (cardsPerRow === 3 ? 6 : 12),
-                  marginLeft: cardsPerRow === 3 && isMiddleColumn ? 6 : 0
+                  marginRight: isRightColumn ? 0 : 1,
+                  marginLeft: isMiddleColumn ? 0.5 : 0,
+                  marginBottom: 1,
                 }
               ]}
             >
@@ -473,20 +488,26 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             
             <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>Profile</Text>
+              {isCurrentUser && <Text style={styles.headerTitle}>Profile</Text>}
             </View>
             
             <View style={styles.headerActions}>
-              <TouchableOpacity 
-                onPress={() => router.push('/edit-profile')} 
-                style={styles.headerActionButton}
-              >
-                <Ionicons name="create-outline" size={22} color="white" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={handleSettingsMenu} style={styles.headerActionButton}>
-                <Ionicons name="ellipsis-vertical" size={22} color="white" />
-              </TouchableOpacity>
+              {isCurrentUser ? (
+                <>
+                  <TouchableOpacity 
+                    onPress={() => router.push('/edit-profile')} 
+                    style={styles.headerActionButton}
+                  >
+                    <Ionicons name="create-outline" size={22} color="white" />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity onPress={handleSettingsMenu} style={styles.headerActionButton}>
+                    <Ionicons name="ellipsis-vertical" size={22} color="white" />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.headerSpacer} />
+              )}
             </View>
           </View>
         </BlurView>
@@ -529,22 +550,22 @@ export default function ProfileScreen() {
                     colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
                     style={styles.avatarRing}
                   >
-                    {currentUser.avatar ? (
+                    {displayUser?.avatar ? (
                       <Image 
-                        source={{ uri: currentUser.avatar }} 
+                        source={{ uri: displayUser.avatar }} 
                         style={styles.avatar}
-                        onLoad={() => console.log('✅ Profile avatar loaded:', currentUser.avatar)}
-                        onError={(error) => console.log('❌ Profile avatar error:', error, 'URL:', currentUser.avatar)}
+                        onLoad={() => console.log('✅ Profile avatar loaded:', displayUser.avatar)}
+                        onError={(error) => console.log('❌ Profile avatar error:', error, 'URL:', displayUser.avatar)}
                       />
                     ) : (
                       <View style={[styles.avatar, styles.defaultAvatar]}>
                         <Text style={styles.initialsText}>
-                          {(currentUser.name || currentUser.username || 'U').slice(0, 2).toUpperCase()}
+                          {(displayUser?.name || displayUser?.username || 'U').slice(0, 2).toUpperCase()}
                         </Text>
                       </View>
                     )}
                   </LinearGradient>
-                  {currentUser.verified && (
+                  {displayUser?.verified && (
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="checkmark" size={12} color="white" />
                     </View>
@@ -552,13 +573,13 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={styles.userInfo}>
-                  <Text style={styles.displayName}>{currentUser.name}</Text>
-                  <Text style={styles.username}>@{currentUser.username}</Text>
+                  <Text style={styles.displayName}>{displayUser?.name}</Text>
+                  <Text style={styles.username}>@{displayUser?.username}</Text>
                   
-                  {currentUser.location && (
+                  {displayUser?.location && (
                     <View style={styles.locationRow}>
                       <Ionicons name="location" size={14} color="rgba(255,255,255,0.7)" />
-                      <Text style={styles.locationText}>{currentUser.location}</Text>
+                      <Text style={styles.locationText}>{displayUser.location}</Text>
                     </View>
                   )}
                   
@@ -566,7 +587,7 @@ export default function ProfileScreen() {
                   <View style={styles.joinDateRow}>
                     <Ionicons name="calendar" size={12} color="rgba(255,255,255,0.5)" />
                     <Text style={styles.joinDateText}>
-                      Joined {new Date(currentUser.created_at).toLocaleDateString('en-US', { 
+                      Joined {new Date(displayUser?.created_at).toLocaleDateString('en-US', { 
                         month: 'short', 
                         year: 'numeric' 
                       })}
@@ -576,19 +597,19 @@ export default function ProfileScreen() {
               </View>
 
               {/* Bio */}
-              {currentUser.bio && (
+              {displayUser?.bio && (
                 <View style={styles.bioSection}>
-                  <Text style={styles.bioText}>{currentUser.bio}</Text>
+                  <Text style={styles.bioText}>{displayUser.bio}</Text>
                 </View>
               )}
 
               {/* Website */}
-              {currentUser.website && (
+              {displayUser?.website && (
                 <TouchableOpacity style={styles.websiteSection}>
                   <View style={styles.websiteIconWrapper}>
                     <Ionicons name="link" size={14} color="#4ECDC4" />
                   </View>
-                  <Text style={styles.websiteText}>{currentUser.website}</Text>
+                  <Text style={styles.websiteText}>{displayUser.website}</Text>
                 </TouchableOpacity>
               )}
 
@@ -604,7 +625,7 @@ export default function ProfileScreen() {
               
               <View style={styles.statsRow}>
                 <TouchableOpacity style={styles.statCard}>
-                  <Text style={styles.statNumber}>{currentUser.posts_count || userPosts.length}</Text>
+                  <Text style={styles.statNumber}>{displayUser?.posts_count || userPosts.length}</Text>
                   <Text style={styles.statLabel}>Posts</Text>
                 </TouchableOpacity>
                 
@@ -612,9 +633,9 @@ export default function ProfileScreen() {
                 
                 <TouchableOpacity 
                   style={styles.statCard}
-                  onPress={() => router.push(`/user/${currentUser.id}/follow-tabs?tab=followers`)}
+                  onPress={() => router.push(`/user/${displayUser?.id}/follow-tabs?tab=followers`)}
                 >
-                  <Text style={styles.statNumber}>{(realCounts?.followers_count ?? currentUser.followers_count ?? 0).toLocaleString()}</Text>
+                  <Text style={styles.statNumber}>{(realCounts?.followers_count ?? displayUser?.followers_count ?? 0).toLocaleString()}</Text>
                   <Text style={styles.statLabel}>Followers</Text>
                 </TouchableOpacity>
                 
@@ -622,9 +643,9 @@ export default function ProfileScreen() {
                 
                 <TouchableOpacity 
                   style={styles.statCard}
-                  onPress={() => router.push(`/user/${currentUser.id}/follow-tabs?tab=following`)}
+                  onPress={() => router.push(`/user/${displayUser?.id}/follow-tabs?tab=following`)}
                 >
-                  <Text style={styles.statNumber}>{(realCounts?.following_count ?? currentUser.following_count ?? 0).toLocaleString()}</Text>
+                  <Text style={styles.statNumber}>{(realCounts?.following_count ?? displayUser?.following_count ?? 0).toLocaleString()}</Text>
                   <Text style={styles.statLabel}>Following</Text>
                 </TouchableOpacity>
               </View>
@@ -798,6 +819,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  headerSpacer: {
+    width: 80, // Match the width of both action buttons with gap
+  },
   headerActionButton: {
     width: 38,
     height: 38,
@@ -810,12 +834,13 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     paddingTop: 120,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     paddingBottom: 20,
   },
   profileCard: {
-    borderRadius: 20,
+    borderRadius: 0,
     marginBottom: 16,
+    marginHorizontal: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -823,9 +848,11 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   profileCardGradient: {
-    borderRadius: 20,
+    borderRadius: 0,
     padding: 20,
-    borderWidth: 1,
+    borderWidth: 0,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   userInfo: {
@@ -904,7 +931,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statsCard: {
-    borderRadius: 16,
+    borderRadius: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -912,9 +939,11 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   statsCardGradient: {
-    borderRadius: 16,
+    borderRadius: 0,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 0,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   statsRow: {
@@ -949,14 +978,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   tabSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     marginBottom: 20,
   },
   tabContainer: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    borderRadius: 0,
     padding: 4,
     flexDirection: 'row',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   tab: {
     flex: 1,
@@ -980,7 +1012,7 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   contentSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     paddingBottom: 100,
   },
   feedContentSection: {
@@ -993,11 +1025,11 @@ const styles = StyleSheet.create({
   compactGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     justifyContent: 'flex-start',
   },
   compactCardWrapper: {
-    marginBottom: 16,
+    // Margins handled dynamically for spacing
   },
   postsGrid: {
     flexDirection: 'row',

@@ -269,7 +269,7 @@ export default function SearchScreen() {
                 <TouchableOpacity 
                   key={user.id} 
                   style={styles.searchUserCard}
-                  onPress={() => router.push(`/user/${user.id}`)}
+                  onPress={() => router.push(`/(tabs)/profile?userId=${user.id}`)}
                 >
                   <LinearGradient
                     colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.06)']}

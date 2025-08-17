@@ -129,7 +129,7 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
   }, [isLiked, likeAnimation]);
 
   const handleUserPress = useCallback(() => {
-    router.push(`/user/${post.user.id}`);
+    router.push(`/(tabs)/profile?userId=${post.user.id}`);
   }, [post.user.id, router]);
 
   const handlePostPress = useCallback(() => {
@@ -371,35 +371,33 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
   );
 }
 
-// Responsive card sizing based on screen width - SIDE BY SIDE LAYOUT
+// Responsive card sizing based on screen width - WITH SMALL GAPS
 const getCardDimensions = () => {
-  const padding = 40; // Total horizontal padding (20px on each side)
-  const gap = 12; // Gap between cards
+  const gap = 1; // Small gap between cards
   
   if (width < 350) {
     // Small phones: 2 columns
     return {
-      cardWidth: (width - padding - gap) / 2,
+      cardWidth: (width - gap) / 2,
       columns: 2
     };
   } else if (width > 500) {
     // Tablets/large phones: 3 columns
-    const totalGaps = 2 * gap; // 2 gaps for 3 columns
     return {
-      cardWidth: (width - padding - totalGaps) / 3,
+      cardWidth: (width - (2 * gap)) / 3,
       columns: 3
     };
   } else {
     // Standard phones: 2 columns
     return {
-      cardWidth: (width - padding - gap) / 2,
+      cardWidth: (width - gap) / 2,
       columns: 2
     };
   }
 };
 
 const { cardWidth } = getCardDimensions();
-const cardHeight = cardWidth * 1.6; // Increased aspect ratio from 1.4 to 1.6
+const cardHeight = cardWidth * 1.2; // Reduced aspect ratio for shorter cards
 
 const styles = StyleSheet.create({
   container: {

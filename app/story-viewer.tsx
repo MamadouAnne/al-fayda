@@ -6,7 +6,8 @@ import {
   Dimensions,
   StyleSheet,
   StatusBar,
-  Animated
+  Animated,
+  PanResponder
 } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,6 +28,46 @@ export default function StoryViewerScreen() {
   const [loading, setLoading] = useState(true);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderGrant: () => {
+        progressAnim.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          const progress = Math.min(gestureState.dy / 200, 1);
+          translateY.setValue(gestureState.dy);
+          scale.setValue(1 - progress * 0.1);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100) {
+          // Close the story immediately if swiped down enough
+          router.back();
+        } else {
+          // Reset to original position
+          Animated.parallel([
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+            }),
+            Animated.spring(scale, {
+              toValue: 1,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            startProgressAnimation();
+          });
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     initializeViewer();
@@ -175,7 +216,25 @@ export default function StoryViewerScreen() {
 
   const handleClose = () => {
     progressAnim.stopAnimation();
-    router.back();
+    
+    // Ensure content is visible during transition
+    opacityAnim.setValue(1);
+    
+    // Animate close with same style as swipe down
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scale, {
+        toValue: 0.7,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      router.back();
+    });
   };
 
   if (loading || stories.length === 0) {
@@ -190,8 +249,20 @@ export default function StoryViewerScreen() {
   const currentStory = stories[currentStoryIndex];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.backgroundContainer}>
       <StatusBar barStyle="light-content" backgroundColor="black" />
+      <Animated.View 
+        style={[
+          styles.container,
+          {
+            transform: [
+              { translateY: translateY },
+              { scale: scale }
+            ]
+          }
+        ]}
+        {...panResponder.panHandlers}
+      >
       
       {/* Background Image */}
       <Animated.View style={[styles.imageContainer, { opacity: opacityAnim }]}>
@@ -231,7 +302,7 @@ export default function StoryViewerScreen() {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.userInfo}
-          onPress={() => router.push(`/user/${currentStory.user?.id}`)}
+          onPress={() => router.push(`/(tabs)/profile?userId=${currentStory.user?.id}`)}
         >
           <Image 
             source={{ uri: currentStory.user?.avatar || `https://i.pravatar.cc/150?u=${currentStory.user?.id}` }} 
@@ -281,11 +352,16 @@ export default function StoryViewerScreen() {
           👁 {currentStory.views_count} views
         </Text>
       </View>
+    </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+  },
   container: {
     flex: 1,
     backgroundColor: 'black',

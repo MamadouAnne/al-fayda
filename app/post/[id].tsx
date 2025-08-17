@@ -1146,7 +1146,7 @@ export default function PostDetailScreen() {
 
   const handleUserPress = () => {
     if (postUser?.id) {
-      router.push(`/user/${postUser.id}`);
+      router.push(`/(tabs)/profile?userId=${postUser.id}`);
     }
   };
 
@@ -1479,7 +1479,7 @@ export default function PostDetailScreen() {
               {comments.map((comment) => (
                 <View key={comment.id} style={styles.commentDisplayItem}>
                   <TouchableOpacity 
-                    onPress={() => comment.user?.id && router.push(`/user/${comment.user.id}`)}
+                    onPress={() => comment.user?.id && router.push(`/(tabs)/profile?userId=${comment.user.id}`)}
                     style={styles.commentUserRow}
                   >
                     <Text style={styles.commentDisplayAuthor}>{comment.user?.name || 'Unknown User'}</Text>

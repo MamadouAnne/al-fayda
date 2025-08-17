@@ -172,7 +172,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   };
 
   const handleSave = () => setIsSaved(!isSaved);
-  const handleUserPress = () => router.push(`/user/${post.user.id}`);
+  const handleUserPress = () => router.push(`/(tabs)/profile?userId=${post.user.id}`);
   const handlePostPress = () => router.push(`/post/${post.id}`);
 
   const onScroll = (event: any) => {
@@ -292,9 +292,6 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
               </View>
             )}
           </TouchableOpacity>
-          <View style={styles.videoIndicator}>
-            <Ionicons name="videocam" size={20} color="white" />
-          </View>
         </View>
       );
     } else {
@@ -595,14 +592,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  videoIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
-    padding: 6,
   },
   playOverlay: {
     position: 'absolute',

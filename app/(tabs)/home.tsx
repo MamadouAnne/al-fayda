@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { postsApi, storiesApi, subscriptions } from '@/lib/api';
 import { getAvatarUrl, getPostImageUrls, getStoryMediaUrl } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const { profile } = useAuth();
 
   // Load posts and stories on component mount
   const loadPosts = useCallback(async () => {
@@ -222,7 +224,7 @@ export default function HomeScreen() {
       {/* Dynamic Floating Background */}
       <View style={styles.backgroundContainer}>
         <LinearGradient
-          colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+          colors={['#667eea', '#764ba2']}
           style={StyleSheet.absoluteFillObject}
         />
         <Animated.View 
@@ -251,10 +253,32 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* Artistic AL-Fayda Logo Header */}
+      <View style={styles.logoHeader}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+          style={styles.logoBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoText}>AL-Fayda</Text>
+            <View style={styles.logoUnderline}>
+              <LinearGradient
+                colors={['#FF6B6B', '#4ECDC4', '#45B7D1']}
+                style={styles.logoGradientLine}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
 
 
       {/* Immersive Story Experience */}
-      <View style={[styles.storySection, { paddingTop: 15 }]}>
+      <View style={[styles.storySection, { paddingTop: 60 }]}>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
@@ -270,7 +294,25 @@ export default function HomeScreen() {
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
               style={styles.addStoryGradient}
             >
-              <Ionicons name="add" size={24} color="white" />
+              {/* Current User Avatar at top */}
+              {profile && (
+                <View style={styles.addStoryUserContainer}>
+                  {profile.avatar ? (
+                    <Image 
+                      source={{ uri: profile.avatar }} 
+                      style={styles.addStoryUserImage} 
+                    />
+                  ) : (
+                    <View style={[styles.addStoryUserImage, styles.addStoryUserImageDefault]}>
+                      <Text style={styles.addStoryUserInitials}>
+                        {(profile.name || profile.username || 'U').slice(0, 1).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              
+              <Ionicons name="add" size={20} color="white" />
               <Text style={styles.addStoryText}>Your Story</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -579,6 +621,8 @@ const styles = StyleSheet.create({
     marginRight: 6,
     borderRadius: 16,
     overflow: 'hidden',
+    alignSelf: 'center',
+    marginTop: -24,
   },
   addStoryGradient: {
     width: 70,
@@ -709,7 +753,7 @@ const styles = StyleSheet.create({
   },
   feedList: {
     flex: 1,
-    paddingTop: 20,
+    paddingTop: 0,
   },
   floatingActionHub: {
     position: 'absolute',
@@ -759,5 +803,68 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+  },
+  logoHeader: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    zIndex: 5,
+    alignItems: 'center',
+  },
+  logoBackground: {
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    fontFamily: 'System',
+  },
+  logoUnderline: {
+    marginTop: 2,
+    width: 60,
+    height: 2,
+    borderRadius: 1,
+    overflow: 'hidden',
+  },
+  logoGradientLine: {
+    flex: 1,
+    height: '100%',
+  },
+  addStoryUserContainer: {
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  addStoryUserImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.8)',
+  },
+  addStoryUserImageDefault: {
+    backgroundColor: '#667eea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addStoryUserInitials: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

@@ -42,7 +42,7 @@ export default function StoryBubble({ story }: StoryBubbleProps) {
 
   const handleStoryPress = () => {
     // Navigate to user profile when story is tapped
-    router.push(`/user/${story.id}`);
+    router.push(`/(tabs)/profile?userId=${story.id}`);
   };
 
   return (

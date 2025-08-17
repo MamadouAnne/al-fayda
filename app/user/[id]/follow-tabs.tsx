@@ -93,11 +93,7 @@ export default function FollowTabsScreen() {
   }, [loadData]);
 
   const handleUserPress = (userId: string) => {
-    if (userId === currentUser?.id) {
-      router.push('/profile');
-    } else {
-      router.push(`/user/${userId}`);
-    }
+    router.push(`/(tabs)/profile?userId=${userId}`);
   };
 
   const handleAvatarPress = (userId: string) => {
