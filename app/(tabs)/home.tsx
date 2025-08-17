@@ -12,6 +12,24 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
+// Global tab bar visibility state
+let globalTabBarVisibility = true;
+let tabBarVisibilityCallback: ((visible: boolean) => void) | null = null;
+
+export const setTabBarVisible = (visible: boolean) => {
+  globalTabBarVisibility = visible;
+  if (tabBarVisibilityCallback) {
+    tabBarVisibilityCallback(visible);
+  }
+};
+
+export const subscribeToTabBarVisibility = (callback: (visible: boolean) => void) => {
+  tabBarVisibilityCallback = callback;
+  return () => {
+    tabBarVisibilityCallback = null;
+  };
+};
+
 export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -24,6 +42,8 @@ export default function HomeScreen() {
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const scrollDirection = useRef(new Animated.Value(0)).current; // 0 = down (show), 1 = up (hide)
   const router = useRouter();
   const { profile } = useAuth();
 
@@ -132,6 +152,34 @@ export default function HomeScreen() {
       ])
     ).start();
 
+    // Listen to scroll changes for bottom navigation animation
+    const scrollListener = scrollY.addListener(({ value }) => {
+      const currentScrollY = value;
+      const scrollDiff = currentScrollY - lastScrollY.current;
+      
+      // Ultra responsive - trigger on any scroll movement (> 1px)
+      if (Math.abs(scrollDiff) > 1) {
+        if (scrollDiff > 0 && currentScrollY > 10) {
+          // Scrolling up - hide bottom navigation immediately
+          setTabBarVisible(false);
+          Animated.timing(scrollDirection, {
+            toValue: 1,
+            duration: 150, // Even faster animation
+            useNativeDriver: true,
+          }).start();
+        } else if (scrollDiff < 0) {
+          // Scrolling down - show bottom navigation immediately
+          setTabBarVisible(true);
+          Animated.timing(scrollDirection, {
+            toValue: 0,
+            duration: 150, // Even faster animation
+            useNativeDriver: true,
+          }).start();
+        }
+        lastScrollY.current = currentScrollY;
+      }
+    });
+
     // Subscribe to real-time post updates
     const postSubscription = subscriptions.subscribeToposts((payload) => {
       console.log('New post received:', payload);
@@ -141,11 +189,12 @@ export default function HomeScreen() {
 
     return () => {
       clearInterval(timer);
+      scrollY.removeListener(scrollListener);
       if (postSubscription) {
         postSubscription.unsubscribe();
       }
     };
-  }, [loadPosts]);
+  }, [loadPosts, scrollY, scrollDirection]);
 
   // Handle screen focus/blur to pause videos when navigating away
   useFocusEffect(
@@ -273,15 +322,8 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Avant-garde Morphing Background */}
-      <Animated.View 
-        style={[
-          styles.backgroundContainer,
-          {
-            transform: [{ translateY: backgroundTranslateY }],
-          }
-        ]}
-      >
+      {/* Background that stays fixed while content scrolls */}
+      <View style={styles.backgroundContainer}>
         <LinearGradient
           colors={['#0f0f23', '#1a1a2e', '#16213e']}
           style={StyleSheet.absoluteFillObject}
@@ -308,18 +350,22 @@ export default function HomeScreen() {
             styles.morphShape2,
             { 
               transform: [
-                { translateX: floatingAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-20, 20],
-                }) },
-                { translateY: backgroundParallax2 },
-                { scale: Animated.multiply(
-                  floatingAnimation.interpolate({
+                { 
+                  translateX: floatingAnimation.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [1, 1.2],
-                  }),
-                  backgroundScale
-                )}
+                    outputRange: [-20, 20],
+                  }) 
+                },
+                { translateY: backgroundParallax2 },
+                { 
+                  scale: Animated.multiply(
+                    floatingAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.2],
+                    }),
+                    backgroundScale
+                  )
+                }
               ] 
             }
           ]}
@@ -329,18 +375,22 @@ export default function HomeScreen() {
             styles.morphShape3,
             { 
               transform: [
-                { translateY: Animated.add(
-                  floatingAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [15, -15],
-                  }),
-                  backgroundParallax3
-                )},
+                { 
+                  translateY: Animated.add(
+                    floatingAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [15, -15],
+                    }),
+                    backgroundParallax3
+                  )
+                },
                 { scale: backgroundScale },
-                { rotate: floatingAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['360deg', '0deg'],
-                }) }
+                { 
+                  rotate: floatingAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['360deg', '0deg'],
+                  }) 
+                }
               ] 
             }
           ]}
@@ -353,174 +403,178 @@ export default function HomeScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-      </Animated.View>
-
-      {/* Futuristic Header Design */}
-      <Animated.View 
-        style={[
-          styles.futuristicHeader,
-          {
-            transform: [{ translateY: headerTranslateY }],
-            opacity: headerOpacity,
-          }
-        ]}
-      >
-        <BlurView intensity={20} style={styles.headerBlurContainer}>
-          <View style={styles.headerContent}>
-            <View style={styles.brandSection}>
-              <View style={styles.brandIcon}>
-                <LinearGradient
-                  colors={['#FF6B6B', '#4ECDC4']}
-                  style={styles.brandIconGradient}
-                >
-                  <Text style={styles.brandInitial}>A</Text>
-                </LinearGradient>
-              </View>
-              <View style={styles.brandTextContainer}>
-                <Text style={styles.brandName}>AL-Fayda</Text>
-                <Text style={styles.brandSubtitle}>{getGreeting()}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.searchButton}>
-                <BlurView intensity={30} style={styles.actionButtonBlur}>
-                  <Ionicons name="search" size={20} color="white" />
-                </BlurView>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.notificationButton}>
-                <BlurView intensity={30} style={styles.actionButtonBlur}>
-                  <Ionicons name="notifications" size={20} color="white" />
-                  <View style={styles.notificationDot} />
-                </BlurView>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </BlurView>
-      </Animated.View>
-
-
-
-      {/* Neo-Morphic Story Constellation */}
-      <Animated.View 
-        style={[
-          styles.storyConstellation,
-          {
-            transform: [{ translateY: storyBarTranslateY }],
-            opacity: storyBarOpacity,
-          }
-        ]}
-      >
-        {/* Story Bar Background */}
-        <View style={styles.storyBarBackground}>
-          <LinearGradient
-            colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
-            style={styles.storyBarGradient}
-          />
-        </View>
-        
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.storyConstellationContent}
-          style={styles.storyConstellationScroll}
-        >
-          {/* Create Story Portal */}
-          <TouchableOpacity 
-            style={styles.createStoryPortal}
-            onPress={() => router.push('/create-story')}
-          >
-            <BlurView intensity={25} style={styles.portalBlur}>
-              <LinearGradient
-                colors={['rgba(255,107,107,0.3)', 'rgba(78,205,196,0.3)']}
-                style={styles.portalGradient}
-              >
-                {profile && (
-                  <View style={styles.portalUserAvatar}>
-                    {profile.avatar ? (
-                      <Image 
-                        source={{ uri: profile.avatar }} 
-                        style={styles.portalAvatarImage} 
-                      />
-                    ) : (
-                      <View style={[styles.portalAvatarImage, styles.portalAvatarDefault]}>
-                        <Text style={styles.portalAvatarText}>
-                          {(profile.name || profile.username || 'U').slice(0, 1).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-                <View style={styles.portalPlusIcon}>
-                  <Ionicons name="add" size={16} color="white" />
-                </View>
-                <Text style={styles.portalText}>Create</Text>
-              </LinearGradient>
-            </BlurView>
-          </TouchableOpacity>
-          
-          {/* Story Orbs */}
-          {groupedStories.map((storyGroup, index) => (
-            <TouchableOpacity 
-              key={storyGroup.user_id} 
-              style={styles.storyOrb}
-              onPress={() => {
-                storyGroup.stories.forEach((story: any) => {
-                  setViewedStories(prev => new Set([...prev, story.id]));
-                });
-                
-                router.push({
-                  pathname: '/story-viewer',
-                  params: { 
-                    storyId: storyGroup.id,
-                    userId: storyGroup.user_id,
-                    userStories: JSON.stringify(storyGroup.stories.map((s: any) => s.id)),
-                    allUserStories: JSON.stringify(groupedStories.map((g: any) => ({
-                      userId: g.user_id,
-                      storyId: g.id,
-                      stories: g.stories.map((s: any) => s.id)
-                    }))),
-                    currentUserIndex: index.toString()
-                  }
-                });
-              }}
-            >
-              <View style={styles.orbContainer}>
-                <LinearGradient
-                  colors={storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
-                          storyGroup.stories.every((s: any) => viewedStories.has(s.id))
-                    ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']
-                    : ['#FF6B6B', '#4ECDC4']
-                  }
-                  style={styles.orbGradientRing}
-                >
-                  <BlurView intensity={20} style={styles.orbImageContainer}>
-                    <Image 
-                      source={{ uri: getStoryMediaUrl(storyGroup.media_url) || storyGroup.media_url }} 
-                      style={styles.orbImage} 
-                    />
-                  </BlurView>
-                </LinearGradient>
-                
-                {storyGroup.story_count > 1 && (
-                  <View style={styles.orbMultiIndicator}>
-                    <Text style={styles.orbMultiText}>{storyGroup.story_count}</Text>
-                  </View>
-                )}
-              </View>
-              
-              <Text style={styles.orbUsername} numberOfLines={1}>
-                {storyGroup.user?.username || storyGroup.user?.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
+      </View>
 
       {/* Immersive Content Flow */}
       <Animated.FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={() => (
+          <View>
+            {/* Content spacer for header */}
+            <View style={styles.headerSpacer} />
+            
+            {/* Futuristic Header Design */}
+            <Animated.View 
+              style={[
+                styles.futuristicHeader,
+                {
+                  transform: [{ translateY: headerTranslateY }],
+                  opacity: headerOpacity,
+                }
+              ]}
+            >
+              <BlurView intensity={20} style={styles.headerBlurContainer}>
+                <View style={styles.headerContent}>
+                  <View style={styles.brandSection}>
+                    <View style={styles.brandIcon}>
+                      <LinearGradient
+                        colors={['#FF6B6B', '#4ECDC4']}
+                        style={styles.brandIconGradient}
+                      >
+                        <Text style={styles.brandInitial}>A</Text>
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.brandTextContainer}>
+                      <Text style={styles.brandName}>AL-Fayda</Text>
+                      <Text style={styles.brandSubtitle}>{getGreeting()}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.headerActions}>
+                    <TouchableOpacity style={styles.searchButton}>
+                      <BlurView intensity={30} style={styles.actionButtonBlur}>
+                        <Ionicons name="search" size={20} color="white" />
+                      </BlurView>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.notificationButton}>
+                      <BlurView intensity={30} style={styles.actionButtonBlur}>
+                        <Ionicons name="notifications" size={20} color="white" />
+                        <View style={styles.notificationDot} />
+                      </BlurView>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </BlurView>
+            </Animated.View>
+
+            {/* Neo-Morphic Story Constellation */}
+            <Animated.View 
+              style={[
+                styles.storyConstellation,
+                {
+                  transform: [{ translateY: storyBarTranslateY }],
+                  opacity: storyBarOpacity,
+                }
+              ]}
+            >
+              {/* Story Bar Background */}
+              <View style={styles.storyBarBackground}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                  style={styles.storyBarGradient}
+                />
+              </View>
+              
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.storyConstellationContent}
+                style={styles.storyConstellationScroll}
+              >
+                {/* Create Story Portal */}
+                <TouchableOpacity 
+                  style={styles.createStoryPortal}
+                  onPress={() => router.push('/create-story')}
+                >
+                  <BlurView intensity={25} style={styles.portalBlur}>
+                    <LinearGradient
+                      colors={['rgba(255,107,107,0.3)', 'rgba(78,205,196,0.3)']}
+                      style={styles.portalGradient}
+                    >
+                      {profile && (
+                        <View style={styles.portalUserAvatar}>
+                          {profile.avatar ? (
+                            <Image 
+                              source={{ uri: profile.avatar }} 
+                              style={styles.portalAvatarImage} 
+                            />
+                          ) : (
+                            <View style={[styles.portalAvatarImage, styles.portalAvatarDefault]}>
+                              <Text style={styles.portalAvatarText}>
+                                {(profile.name || profile.username || 'U').slice(0, 1).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      <View style={styles.portalPlusIcon}>
+                        <Ionicons name="add" size={16} color="white" />
+                      </View>
+                      <Text style={styles.portalText}>Create</Text>
+                    </LinearGradient>
+                  </BlurView>
+                </TouchableOpacity>
+                
+                {/* Story Orbs */}
+                {groupedStories.map((storyGroup, index) => (
+                  <TouchableOpacity 
+                    key={storyGroup.user_id} 
+                    style={styles.storyOrb}
+                    onPress={() => {
+                      storyGroup.stories.forEach((story: any) => {
+                        setViewedStories(prev => new Set([...prev, story.id]));
+                      });
+                      
+                      router.push({
+                        pathname: '/story-viewer',
+                        params: { 
+                          storyId: storyGroup.id,
+                          userId: storyGroup.user_id,
+                          userStories: JSON.stringify(storyGroup.stories.map((s: any) => s.id)),
+                          allUserStories: JSON.stringify(groupedStories.map((g: any) => ({
+                            userId: g.user_id,
+                            storyId: g.id,
+                            stories: g.stories.map((s: any) => s.id)
+                          }))),
+                          currentUserIndex: index.toString()
+                        }
+                      });
+                    }}
+                  >
+                    <View style={styles.orbContainer}>
+                      <LinearGradient
+                        colors={storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
+                                storyGroup.stories.every((s: any) => viewedStories.has(s.id))
+                          ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']
+                          : ['#FF6B6B', '#4ECDC4']
+                        }
+                        style={styles.orbGradientRing}
+                      >
+                        <BlurView intensity={20} style={styles.orbImageContainer}>
+                          <Image 
+                            source={{ uri: getStoryMediaUrl(storyGroup.media_url) || storyGroup.media_url }} 
+                            style={styles.orbImage} 
+                          />
+                        </BlurView>
+                      </LinearGradient>
+                      
+                      {storyGroup.story_count > 1 && (
+                        <View style={styles.orbMultiIndicator}>
+                          <Text style={styles.orbMultiText}>{storyGroup.story_count}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.orbUsername} numberOfLines={1}>
+                      {storyGroup.user?.username || storyGroup.user?.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          </View>
+        )}
         renderItem={({ item, index }) => (
           <View style={styles.contentCardWrapper}>
             <BlurView intensity={15} style={styles.contentCardBlur}>
@@ -564,7 +618,7 @@ export default function HomeScreen() {
           ) : null
         }
       />
-
+      
       {/* Quantum Floating Action Portal */}
       <View style={styles.quantumActionPortal}>
         <TouchableOpacity 
@@ -588,15 +642,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#0f0f23', // Match the gradient background color
   },
   backgroundContainer: {
-    position: 'absolute',
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
     height: '120%',
-    top: -100,
-    overflow: 'hidden',
-    zIndex: -10,
+    zIndex: -1,
+    backgroundColor: '#0f0f23', // Ensure background color matches
+  },
+  headerSpacer: {
+    height: 10, // Minimal top spacing
   },
   
   // Avant-garde Morphing Shapes

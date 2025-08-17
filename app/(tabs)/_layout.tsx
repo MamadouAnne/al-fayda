@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { 
   View, 
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { subscribeToTabBarVisibility } from './home';
 
 const { width } = Dimensions.get('window');
 
@@ -25,6 +26,8 @@ interface TabBarProps {
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const floatingAnimation = useRef(new Animated.Value(0)).current;
+  const tabBarAnimation = useRef(new Animated.Value(0)).current; // 0 = visible, 1 = hidden
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     Animated.loop(
@@ -41,11 +44,35 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
         }),
       ])
     ).start();
-  }, []);
+
+    // Subscribe to tab bar visibility changes
+    const unsubscribe = subscribeToTabBarVisibility((visible) => {
+      setIsVisible(visible);
+      Animated.timing(tabBarAnimation, {
+        toValue: visible ? 0 : 1,
+        duration: 150, // Ultra fast animation
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [tabBarAnimation]);
 
   const floatingY = floatingAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -2],
+  });
+
+  const tabBarTranslateY = tabBarAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 100], // Hide by moving down 100px
+  });
+
+  const tabBarOpacity = tabBarAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
   });
 
   // Consistent gradient for all selected tabs
@@ -99,7 +126,16 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   ];
 
   return (
-    <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
+    <Animated.View 
+      style={[
+        styles.tabBarContainer, 
+        { 
+          paddingBottom: insets.bottom,
+          transform: [{ translateY: tabBarTranslateY }],
+          opacity: tabBarOpacity,
+        }
+      ]}
+    >
       {/* Background with gradient and blur */}
       <LinearGradient
         colors={['rgba(40, 40, 40, 0.9)', 'rgba(60, 60, 60, 0.8)']} // Lighter colors
@@ -206,7 +242,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       {/* Decorative orbs */}
       <View style={styles.orb} />
       <View style={[styles.orb, { right: 30, top: 10, width: 8, height: 8, opacity: 0.6 }]} />
-    </View>
+    </Animated.View>
   );
 }
 
