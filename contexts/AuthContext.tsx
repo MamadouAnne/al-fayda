@@ -209,12 +209,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         setUser(currentSession.user);
         
-        // Fetch and set profile
+        // Create basic profile
         if (currentSession.user) {
-          console.log('Refresh session found user, fetching profile...');
-          const userProfile = await fetchProfile(currentSession.user.id);
-          console.log('Refresh profile fetch result:', !!userProfile);
-          setProfile(userProfile);
+          try {
+            const userProfile = await fetchProfile(currentSession.user.id, currentSession.user);
+            if (userProfile) {
+              setProfile(userProfile);
+            }
+          } catch (error) {
+            console.error('Error fetching profile during session refresh:', error);
+          }
         }
       } else {
         setSession(null);
@@ -311,30 +315,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Create basic profile immediately
           if (currentSession.user) {
-            const basicProfile: Profile = {
-              id: currentSession.user.id,
-              email: currentSession.user.email || '',
-              name: currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'User',
-              username: currentSession.user.user_metadata?.username || currentSession.user.email?.split('@')[0] || 'user',
-              avatar: currentSession.user.user_metadata?.avatar_url,
-              bio: undefined,
-              verified: false,
-              location: undefined,
-              website: undefined,
-              followers_count: 0,
-              following_count: 0,
-              posts_count: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            setProfile(basicProfile);
-
-            // Sync avatar for auth state changes
-            syncUserAvatar(currentSession.user.id).then(avatarUrl => {
-              if (avatarUrl) {
-                setProfile(prevProfile => prevProfile ? { ...prevProfile, avatar: avatarUrl } : null);
+            try {
+              const userProfile = await fetchProfile(currentSession.user.id, currentSession.user);
+              if (userProfile) {
+                setProfile(userProfile);
               }
-            });
+            } catch (error) {
+              console.error('Error fetching profile during auth state change:', error);
+              // Fallback to basic profile
+              const basicProfile: Profile = {
+                id: currentSession.user.id,
+                email: currentSession.user.email || '',
+                name: currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'User',
+                username: currentSession.user.user_metadata?.username || currentSession.user.email?.split('@')[0] || 'user',
+                avatar: currentSession.user.user_metadata?.avatar_url,
+                bio: undefined,
+                verified: false,
+                location: undefined,
+                website: undefined,
+                followers_count: 0,
+                following_count: 0,
+                posts_count: 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              setProfile(basicProfile);
+            }
           }
         } else {
           console.log('Clearing session and user data');

@@ -155,22 +155,17 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | nu
 
 // Utility function to get story media URL from Supabase storage
 export const getStoryMediaUrl = (mediaPath: string | null | undefined): string | null => {
-  console.log('📸 Processing story media:', mediaPath);
-  
   if (!mediaPath) {
-    console.log('❌ No media path provided');
     return null;
   }
   
   // If it's already a full HTTP URL, return as is
   if (mediaPath.startsWith('http')) {
-    console.log('✅ Already a full URL:', mediaPath);
     return mediaPath;
   }
   
   // If it's a local file path (starts with file://), skip it
   if (mediaPath.startsWith('file://')) {
-    console.log('❌ Local file path detected, skipping:', mediaPath);
     return null;
   }
   
@@ -181,7 +176,6 @@ export const getStoryMediaUrl = (mediaPath: string | null | undefined): string |
       mediaPath.includes('ImagePicker') ||
       mediaPath.includes('%25') || // URL encoded characters
       mediaPath.includes('host.exp.exponent')) {
-    console.log('❌ Local device path detected, skipping:', mediaPath);
     return null;
   }
   
@@ -190,40 +184,30 @@ export const getStoryMediaUrl = (mediaPath: string | null | undefined): string |
     const { data: { publicUrl } } = supabase.storage
       .from('stories')
       .getPublicUrl(mediaPath);
-    console.log('✅ Generated story public URL:', publicUrl);
     return publicUrl;
   } catch (error) {
-    console.error('❌ Error generating story media public URL:', error);
     return null; // Return null instead of invalid path
   }
 };
 
 // Utility function to get post image URLs from Supabase storage
 export const getPostImageUrls = (imagePaths: string[] | null | undefined): string[] => {
-  console.log('🖼️ Processing post images:', imagePaths);
-  
   if (!imagePaths || !Array.isArray(imagePaths)) {
-    console.log('❌ No image paths provided or not an array');
     return [];
   }
   
   const processedUrls = imagePaths.map(imagePath => {
-    console.log('🔄 Processing image path:', imagePath);
-    
     if (!imagePath) {
-      console.log('❌ Empty image path');
       return '';
     }
     
     // If it's already a full HTTP URL, return as is
     if (imagePath.startsWith('http')) {
-      console.log('✅ Already a full URL:', imagePath);
       return imagePath;
     }
     
     // If it's a local file path (starts with file://), skip it
     if (imagePath.startsWith('file://')) {
-      console.log('❌ Local file path detected, skipping:', imagePath);
       return '';
     }
     
@@ -234,7 +218,6 @@ export const getPostImageUrls = (imagePaths: string[] | null | undefined): strin
         imagePath.includes('ImagePicker') ||
         imagePath.includes('%25') || // URL encoded characters
         imagePath.includes('host.exp.exponent')) {
-      console.log('❌ Local device path detected, skipping:', imagePath);
       return '';
     }
     
@@ -243,15 +226,12 @@ export const getPostImageUrls = (imagePaths: string[] | null | undefined): strin
       const { data: { publicUrl } } = supabase.storage
         .from('posts')
         .getPublicUrl(imagePath);
-      console.log('✅ Generated public URL:', publicUrl);
       return publicUrl;
     } catch (error) {
-      console.error('❌ Error generating post image public URL:', error);
       return ''; // Return empty string instead of invalid path
     }
   }).filter(url => url !== ''); // Remove empty URLs
   
-  console.log('🎯 Final processed URLs:', processedUrls);
   return processedUrls;
 };
 

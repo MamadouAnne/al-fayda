@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -828,7 +828,31 @@ export default function PostDetailScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showControls, setShowControls] = useState<{ [key: number]: boolean }>({});
   const [playingStates, setPlayingStates] = useState<{ [key: number]: boolean }>({});
-  const videoRefs = useRef<{ [key: number]: Video | null }>({});
+  // Get first video URL for video player
+  const firstVideoUrl = React.useMemo(() => {
+    return post?.images?.find(url => isVideoUrl(url));
+  }, [post?.images]);
+  
+  const player = useVideoPlayer(firstVideoUrl || '', player => {
+    player.loop = true;
+    player.muted = false;
+  });
+
+  // Control video playback based on current image
+  useEffect(() => {
+    if (firstVideoUrl && player && post?.images) {
+      const currentImage = post.images[currentImageIndex];
+      const shouldPlay = currentImage === firstVideoUrl;
+      
+      if (shouldPlay) {
+        player.play();
+        setPlayingStates(prev => ({ ...prev, [currentImageIndex]: true }));
+      } else {
+        player.pause();
+        setPlayingStates(prev => ({ ...prev, [currentImageIndex]: false }));
+      }
+    }
+  }, [currentImageIndex, firstVideoUrl, player, post?.images]);
 
   // Initialize animation refs with proper types
   const fadeAnimation = useRef<Animated.Value>(new Animated.Value(0)).current;
@@ -1003,30 +1027,14 @@ export default function PostDetailScreen() {
     
     return (
       <View style={styles.imageContainer}>
-        {isVideo ? (
+        {isVideo && item === firstVideoUrl ? (
           <View style={styles.videoContainer}>
-            <Video
-              ref={(ref) => {
-                videoRefs.current[index] = ref;
-              }}
-              source={{ uri: item }}
+            <VideoView
               style={styles.postImage}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={index === currentImageIndex}
-              isLooping={false}
-              isMuted={false}
-              volume={1.0}
-              useNativeControls={false}
-              onError={(error) => console.error('❌ Video failed to load:', item, error)}
-              onLoad={() => console.log('✅ Video loaded successfully:', item)}
-              onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-                if (status.isLoaded) {
-                  setPlayingStates(prev => ({
-                    ...prev,
-                    [index]: status.isPlaying
-                  }));
-                }
-              }}
+              player={player}
+              allowsFullscreen={false}
+              allowsPictureInPicture={false}
+              nativeControls={false}
             />
             
             {/* Custom video controls overlay */}
@@ -1035,15 +1043,16 @@ export default function PostDetailScreen() {
                 <TouchableOpacity 
                   style={styles.playPauseButton}
                   onPress={() => {
-                    const video = videoRefs.current[index];
-                    if (video) {
+                    if (player) {
                       const isPlaying = playingStates[index];
                       if (isPlaying) {
-                        video.pauseAsync();
+                        player.pause();
                         console.log('⏸️ Video paused manually');
+                        setPlayingStates(prev => ({ ...prev, [index]: false }));
                       } else {
-                        video.playAsync();
+                        player.play();
                         console.log('▶️ Video played manually');
+                        setPlayingStates(prev => ({ ...prev, [index]: true }));
                       }
                     }
                   }}

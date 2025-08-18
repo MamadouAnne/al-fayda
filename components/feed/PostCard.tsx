@@ -2,7 +2,8 @@ import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Animated, 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
-import { Video, ResizeMode, AVPlaybackStatus, Audio } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { setAudioModeAsync } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
@@ -13,7 +14,6 @@ let currentlyPlayingVideo: { postId: string; stopVideo: () => void } | null = nu
 const setGlobalPlayingVideo = (postId: string, stopVideoFn: () => void) => {
   // Stop any currently playing video
   if (currentlyPlayingVideo && currentlyPlayingVideo.postId !== postId) {
-    console.log(`📹 Stopping previously playing video: ${currentlyPlayingVideo.postId}`);
     currentlyPlayingVideo.stopVideo();
   }
   currentlyPlayingVideo = { postId, stopVideo: stopVideoFn };
@@ -64,27 +64,45 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes);
   const [savesCount, setSavesCount] = useState(post.saves || 0);
-  const [viewsCount, setViewsCount] = useState(Math.floor(Math.random() * 5000) + 100); // Mock views
-  const [commentsCount, setCommentsCount] = useState(post.comments?.length || 0);
+  const [viewsCount] = useState(Math.floor(Math.random() * 5000) + 100); // Mock views
+  const [commentsCount] = useState(post.comments?.length || 0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
-  const videoRefs = useRef<{ [key: number]: Video | null }>({});
+  
+  // Create video players for all videos in the post
+  const videoUrls = useMemo(() => {
+    return post.images.filter(url => isVideoUrl(url));
+  }, [post.images]);
+  
+  // Create a player for the first video (most common case - single video posts)
+  const mainPlayer = useVideoPlayer(videoUrls[0] || '', player => {
+    player.loop = true;
+    player.muted = false;
+  });
+  
+  // For multiple videos, we'll use the main player for the first video
+  // and fall back to a simpler approach for additional videos
+  const getPlayerForVideo = useCallback((videoUrl: string) => {
+    if (videoUrl === videoUrls[0]) {
+      return mainPlayer;
+    }
+    // For additional videos, return null and render as image
+    // This is a limitation of the current expo-video hook approach
+    return null;
+  }, [videoUrls, mainPlayer]);
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
 
   useEffect(() => {
     const configureAudio = async () => {
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: false,
-          playThroughEarpieceAndroid: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
         });
       } catch (error) {
-        console.error('❌ Error configuring audio session:', error);
+        // Audio configuration error - fail silently
       }
     };
     configureAudio();
@@ -98,9 +116,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
   useEffect(() => {
     if (isVisible) {
       hasBeenVisibleRef.current = true;
-      console.log(`📱 Post ${post.id} marked as having been visible`);
     }
-    console.log(`📱 Post ${post.id} visibility changed: ${isVisible}`);
   }, [isVisible, post.id]);
 
   // Stop videos when screen loses focus (navigating away)
@@ -109,52 +125,39 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
       return () => {
         // Screen is losing focus - stop any playing video
         if (isVideoPlaying) {
-          console.log(`📹 Screen lost focus - stopping video for post ${post.id}`);
           clearGlobalPlayingVideo(String(post.id));
           setIsVideoPlaying(false);
           
-          // Force pause all videos in this post
-          Object.values(videoRefs.current).forEach(video => {
-            if (video) {
-              video.pauseAsync().catch(error => 
-                console.log('Video pause error on screen unfocus:', error)
-              );
-            }
-          });
+          // Force pause video in this post
+          if (mainPlayer) {
+            mainPlayer.pause();
+          }
         }
       };
-    }, [isVideoPlaying, post.id])
+    }, [isVideoPlaying, post.id, mainPlayer])
   );
   
   // Effect to handle stopping videos when post becomes invisible (scroll away)
   useEffect(() => {
-    const wasVisible = prevVisibleRef.current;
     const isNowVisible = isVisible;
-    
-    console.log(`📹 Post ${post.id} visibility effect: wasVisible=${wasVisible}, isNowVisible=${isNowVisible}, isVideoPlaying=${isVideoPlaying}, hasBeenVisible=${hasBeenVisibleRef.current}`);
     
     // Stop video if:
     // 1. Video is currently playing
     // 2. Post is now not visible (strict visibility check, no fallbacks)
     // 3. Post has been visible at least once (to avoid stopping on mount)
     if (isVideoPlaying && !isNowVisible && hasBeenVisibleRef.current) {
-      console.log(`📹 Post ${post.id} stopping video - scrolled away (was: ${wasVisible}, now: ${isNowVisible})`);
       clearGlobalPlayingVideo(String(post.id));
       setIsVideoPlaying(false);
       
-      // Force pause all videos in this post
-      Object.values(videoRefs.current).forEach(video => {
-        if (video) {
-          video.pauseAsync().catch(error => 
-            console.log('Video pause error on scroll away:', error)
-          );
-        }
-      });
+      // Force pause video in this post
+      if (mainPlayer) {
+        mainPlayer.pause();
+      }
     }
     
     // Update previous visibility
     prevVisibleRef.current = isNowVisible;
-  }, [isVisible, isVideoPlaying, post.id]);
+  }, [isVisible, isVideoPlaying, mainPlayer, post.id]);
 
   // Temporarily disable image switching effect to test video playback
   // Effect to reset video playing state when switching images
@@ -190,23 +193,17 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
 
   const stopThisVideo = useCallback(() => {
     setIsVideoPlaying(false);
-    const currentVideo = videoRefs.current[currentImageIndex];
-    if (currentVideo) {
-      currentVideo.pauseAsync().catch(error => {
-        console.log('Error pausing video:', error);
-      });
+    if (mainPlayer) {
+      mainPlayer.pause();
     }
-  }, [currentImageIndex]);
+  }, [mainPlayer]);
 
   const handlePlayVideo = useCallback(() => {
-    console.log(`📹 Play button clicked for post ${post.id}, isVisible: ${isVisible}, hasBeenVisible: ${hasBeenVisibleRef.current}`);
-    
     // Allow video to start if post is visible OR if it's one of the first few posts and hasn't been marked visible yet
     // This handles the case where FlatList hasn't properly detected visibility yet
     const canPlay = isVisible || (index !== undefined && index <= 2 && !hasBeenVisibleRef.current);
     
     if (!canPlay) {
-      console.log(`📹 Cannot start video for post ${post.id} - not visible and not in initial view`);
       return;
     }
     
@@ -214,25 +211,17 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     setGlobalPlayingVideo(String(post.id), stopThisVideo);
     
     setIsVideoPlaying(true);
-    console.log(`📹 Video set to play for post ${post.id} (isVisible: ${isVisible}, index: ${index})`);
   }, [post.id, stopThisVideo, isVisible, index]);
 
   const handlePauseVideo = useCallback(() => {
-    console.log(`📹 Pause button clicked for post ${post.id}`);
-    
     // Clear this video from global playing state
     clearGlobalPlayingVideo(String(post.id));
     
     setIsVideoPlaying(false);
-    console.log(`📹 Pausing video playback for post ${post.id}`);
     
     // Force pause the current video
-    const currentVideo = videoRefs.current[currentImageIndex];
-    if (currentVideo) {
-      console.log(`📹 Force pausing video for post ${post.id}, imgIndex: ${currentImageIndex}`);
-      currentVideo.pauseAsync().catch(error => {
-        console.error(`📹 Error pausing video:`, error);
-      });
+    if (mainPlayer) {
+      mainPlayer.pause();
     }
   }, [post.id, currentImageIndex]);
 
@@ -250,68 +239,83 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     // Use more permissive visibility check - allow early posts or explicitly visible posts
     const isEffectivelyVisible = isVisible || (index !== undefined && index <= 2 && !hasBeenVisibleRef.current);
     const result = isVideoPlaying && currentImageIndex === 0 && isEffectivelyVisible;
-    console.log(`📹 Video ${post.id} shouldPlay calculation: isVideoPlaying=${isVideoPlaying}, currentImageIndex=${currentImageIndex}, isVisible=${isVisible}, isEffectivelyVisible=${isEffectivelyVisible}, result=${result}`);
     return result;
   }, [isVideoPlaying, currentImageIndex, isVisible, index, post.id]);
 
+  // Control video player based on shouldPlayVideo
+  useEffect(() => {
+    if (videoUrls.length > 0 && mainPlayer) {
+      const currentImageUrl = post.images[currentImageIndex] || '';
+      const currentImageIsVideo = isVideoUrl(currentImageUrl);
+      const isMainVideo = currentImageUrl === videoUrls[0];
+      const shouldPlay = shouldPlayVideoForCurrentImage && currentImageIsVideo && isMainVideo;
+      
+      if (shouldPlay) {
+        mainPlayer.play();
+      } else {
+        mainPlayer.pause();
+      }
+    }
+  }, [shouldPlayVideoForCurrentImage, currentImageIndex, videoUrls, mainPlayer, post.images]);
+
   const renderMedia = useCallback((mediaUrl: string, imgIndex: number) => {
     const isVideo = isVideoUrl(mediaUrl);
-    // Use the memoized value for this specific image
-    const shouldPlayVideo = imgIndex === currentImageIndex ? shouldPlayVideoForCurrentImage : false;
     
-    // Debug log when video should play
-    if (isVideo && imgIndex === currentImageIndex) {
-      console.log(`📹 Video ${post.id} renderMedia: imgIndex=${imgIndex}, currentImageIndex=${currentImageIndex}, shouldPlayVideo=${shouldPlayVideo}, memoized=${shouldPlayVideoForCurrentImage}`);
-    }
 
     if (isVideo) {
-      return (
-        <View key={`media-${imgIndex}`} style={styles.videoContainer}>
-          <Video
-            ref={ref => {
-              videoRefs.current[imgIndex] = ref;
-              console.log(`📹 Video ref set for post ${post.id}, imgIndex: ${imgIndex}, shouldPlay: ${shouldPlayVideo}`);
-            }}
-            source={{ uri: mediaUrl }}
-            style={styles.postImage}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={shouldPlayVideo}
-            isLooping
-            isMuted={false}
-            onError={e => console.error(`❌ Video error:`, e)}
-            onLoad={() => console.log(`📹 Video loaded for post ${post.id}, image ${imgIndex}, shouldPlay: ${shouldPlayVideo}`)}
-            onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-              // Reduced logging to prevent spam
-              if (status.isLoaded && status.isPlaying !== shouldPlayVideo) {
-                console.log(`📹 Video status mismatch for post ${post.id}: isPlaying=${status.isPlaying}, shouldPlay=${shouldPlayVideo}`);
-              }
-            }}
-          />
-          <TouchableOpacity
-            style={[styles.playOverlay, isVideoPlaying && { backgroundColor: 'transparent' }]}
-            onPress={togglePlayPause}
-            activeOpacity={1}
-          >
-            {!isVideoPlaying && (
-              <View style={styles.playButton}>
-                <Ionicons name="play" size={40} color="white" />
-              </View>
-            )}
+      const videoPlayer = getPlayerForVideo(mediaUrl);
+      
+      if (videoPlayer) {
+        // Render with video player (for main video)
+        return (
+          <View key={`media-${imgIndex}`} style={styles.videoContainer}>
+            <VideoView
+              style={styles.postImage}
+              player={videoPlayer}
+              allowsFullscreen={false}
+              allowsPictureInPicture={false}
+              nativeControls={false}
+            />
+            <TouchableOpacity
+              style={[styles.playOverlay, isVideoPlaying && { backgroundColor: 'transparent' }]}
+              onPress={togglePlayPause}
+              activeOpacity={1}
+            >
+              {!isVideoPlaying && (
+                <View style={styles.playButton}>
+                  <Ionicons name="play" size={40} color="white" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+      } else {
+        // Render as image with video icon overlay (for additional videos)
+        return (
+          <TouchableOpacity key={`media-${imgIndex}`} onPress={handlePostPress}>
+            <Image
+              source={{ uri: mediaUrl }}
+              style={styles.postImage}
+              onError={() => {}}
+            />
+            <View style={styles.videoIndicatorOverlay}>
+              <Ionicons name="play-circle" size={50} color="rgba(255,255,255,0.8)" />
+            </View>
           </TouchableOpacity>
-        </View>
-      );
+        );
+      }
     } else {
       return (
         <TouchableOpacity key={`media-${imgIndex}`} onPress={handlePostPress}>
           <Image
             source={{ uri: mediaUrl }}
             style={styles.postImage}
-            onError={() => console.error('❌ Image failed to load:', mediaUrl)}
+            onError={() => {}}
           />
         </TouchableOpacity>
       );
     }
-  }, [currentImageIndex, shouldPlayVideoForCurrentImage, post.id, handlePostPress, togglePlayPause, isVideoPlaying]);
+  }, [currentImageIndex, shouldPlayVideoForCurrentImage, post.id, handlePostPress, togglePlayPause, isVideoPlaying, getPlayerForVideo]);
 
   return (
     <View style={styles.container}>
@@ -360,7 +364,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
             style={styles.imageScrollView}
             scrollEventThrottle={16}
           >
-            {post.images.map(renderMedia)}
+            {post.images.map((mediaUrl, imgIndex) => renderMedia(mediaUrl, imgIndex))}
           </ScrollView>
           {post.images.length > 1 && (
             <View style={styles.indicatorContainer}>
@@ -534,11 +538,13 @@ const styles = StyleSheet.create({
   imageSection: {
     position: 'relative',
   },
-  imageScrollView: {},
+  imageScrollView: {
+    height: width * 0.56, // Match the video height for consistent layout
+  },
   postImage: {
-    width: width,
-    height: width * 0.75,
-    borderRadius: 0,
+    width: '100%', // Take full width of the parent container
+    height: width * 0.56, // 16:9 aspect ratio for more modern video format
+    borderRadius: 12, // Add rounded corners for better design
     marginHorizontal: 0,
   },
   indicatorContainer: {
@@ -643,6 +649,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 12, // Match the postImage border radius
+    overflow: 'hidden', // Ensure video respects border radius
   },
   playOverlay: {
     position: 'absolute',
@@ -666,6 +674,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  videoIndicatorOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
 });
 

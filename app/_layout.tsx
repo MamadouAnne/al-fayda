@@ -29,29 +29,30 @@ function RootLayoutNav() {
   const segments = useSegments();
 
   useEffect(() => {
-    console.log('Layout: Auth state check - loading:', loading, 'user:', !!user, 'segments:', segments);
-    
-    if (loading) {
-      console.log('Layout: Still loading auth, waiting...');
-      return; // Wait for auth to load
-    }
-
-    const inTabsGroup = segments[0] === '(tabs)';
-
-    if (user) {
-      console.log('Layout: User is signed in, checking if redirect needed');
-      // User is signed in, redirect to home if they're not already in a protected route
-      if (!inTabsGroup && segments[0] !== 'create-post' && segments[0] !== 'create-story' && segments[0] !== 'story-viewer' && segments[0] !== 'messages' && segments[0] !== 'chat' && segments[0] !== 'notifications' && segments[0] !== 'user' && segments[0] !== 'post' && segments[0] !== 'comments' && segments[0] !== 'edit-profile') {
-        console.log('Layout: Redirecting to home...');
-        router.replace('/(tabs)/home');
-      } else {
-        console.log('Layout: User already in protected route, no redirect needed');
+    try {
+      if (loading) {
+        return; // Wait for auth to load
       }
-    } else {
-      console.log('Layout: User not signed in, checking if protection needed');
-      // User is not signed in, redirect to welcome/auth if they're trying to access protected routes
-      if (inTabsGroup || segments[0] === 'create-post' || segments[0] === 'create-story' || segments[0] === 'story-viewer' || segments[0] === 'messages' || segments[0] === 'chat' || segments[0] === 'notifications' || segments[0] === 'user' || segments[0] === 'post' || segments[0] === 'comments' || segments[0] === 'edit-profile') {
-        console.log('Layout: Redirecting to welcome screen...');
+
+      const inTabsGroup = segments[0] === '(tabs)';
+      const protectedRoutes = ['create-post', 'create-story', 'story-viewer', 'messages', 'chat', 'notifications', 'user', 'post', 'comments', 'edit-profile'];
+      const isInProtectedRoute = inTabsGroup || protectedRoutes.includes(segments[0]);
+
+      if (user) {
+        // User is signed in, redirect to home if they're not already in a protected route
+        if (!isInProtectedRoute) {
+          router.replace('/(tabs)/home');
+        }
+      } else {
+        // User is not signed in, redirect to welcome/auth if they're trying to access protected routes
+        if (isInProtectedRoute) {
+          router.replace('/');
+        }
+      }
+    } catch (error) {
+      console.error('Navigation error in RootLayoutNav:', error);
+      // Fallback navigation to prevent app freeze
+      if (!user) {
         router.replace('/');
       }
     }

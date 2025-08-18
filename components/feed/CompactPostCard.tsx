@@ -2,7 +2,7 @@ import { View, Text, Image, TouchableOpacity, Dimensions, StyleSheet, Animated }
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
@@ -70,7 +70,15 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const [sharesCount, setSharesCount] = useState(post.shares || 0);
   
-  const videoRef = useRef<Video>(null);
+  // Get first video URL for video player
+  const firstVideoUrl = useMemo(() => {
+    return post.images.find(url => isVideoUrl(url));
+  }, [post.images]);
+  
+  const player = useVideoPlayer(firstVideoUrl || '', player => {
+    player.loop = true;
+    player.muted = false;
+  });
   const likeAnimation = useRef(new Animated.Value(1)).current;
   const router = useRouter();
 
@@ -81,16 +89,14 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
       return () => {
         setIsScreenFocused(false);
         // Stop video when screen loses focus
-        if (isVideoPlaying && videoRef.current) {
+        if (isVideoPlaying && player) {
           console.log(`📹 Screen lost focus - stopping video for post ${post.id}`);
           clearGlobalPlayingCompactVideo(String(post.id));
-          videoRef.current.pauseAsync().catch(error => 
-            console.log('Video pause error on screen unfocus:', error)
-          );
+          player.pause();
           setIsVideoPlaying(false);
         }
       };
-    }, [isVideoPlaying, post.id])
+    }, [isVideoPlaying, post.id, player])
   );
 
   // Stop video when component becomes invisible (disabled for grid layout)
@@ -99,15 +105,24 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
     // Only auto-stop for feed-style layouts where visibility tracking is meaningful
     const shouldAutoStop = false; // Disabled for compact cards
     
-    if (!isVisible && isVideoPlaying && videoRef.current && shouldAutoStop) {
+    if (!isVisible && isVideoPlaying && player && shouldAutoStop) {
       console.log(`📹 Post ${post.id} became invisible - stopping video`);
       clearGlobalPlayingCompactVideo(String(post.id));
-      videoRef.current.pauseAsync().catch(error => 
-        console.log('Video pause error on visibility change:', error)
-      );
+      player.pause();
       setIsVideoPlaying(false);
     }
-  }, [isVisible, isVideoPlaying, post.id]);
+  }, [isVisible, isVideoPlaying, player, post.id]);
+
+  // Control video player based on play state
+  useEffect(() => {
+    if (firstVideoUrl && player) {
+      if (isVideoPlaying && isScreenFocused) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+  }, [isVideoPlaying, isScreenFocused, firstVideoUrl, player]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -157,12 +172,10 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
   const stopThisVideo = useCallback(() => {
     console.log(`📹 stopThisVideo called for post ${post.id}`);
     setIsVideoPlaying(false);
-    if (videoRef.current) {
-      videoRef.current.pauseAsync().catch(error => {
-        console.log('Error pausing video:', error);
-      });
+    if (player) {
+      player.pause();
     }
-  }, [post.id]);
+  }, [post.id, player]);
 
   const toggleVideoPlayback = useCallback(() => {
     // For compact cards, only require screen focus - not strict visibility
@@ -172,30 +185,23 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
       return;
     }
 
-    if (videoRef.current) {
+    if (player) {
       if (isVideoPlaying) {
         console.log(`📹 Pausing video for post ${post.id}`);
         clearGlobalPlayingCompactVideo(String(post.id));
-        videoRef.current.pauseAsync().catch(error => 
-          console.log('Video pause error:', error)
-        );
+        player.pause();
         setIsVideoPlaying(false);
       } else {
         console.log(`📹 Starting to play video for post ${post.id}`);
         // Register this video as the globally playing one (this will stop any other playing video)
         setGlobalPlayingCompactVideo(String(post.id), stopThisVideo);
-        videoRef.current.playAsync().then(() => {
-          console.log(`📹 Video play started successfully for post ${post.id}`);
-          setIsVideoPlaying(true);
-        }).catch(error => {
-          console.log('Video play error:', error);
-          setIsVideoPlaying(false);
-        });
+        player.play();
+        setIsVideoPlaying(true);
       }
     } else {
-      console.log(`📹 Video ref is null for post ${post.id}`);
+      console.log(`📹 Video player is null for post ${post.id}`);
     }
-  }, [isVideoPlaying, isScreenFocused, post.id, stopThisVideo]);
+  }, [isVideoPlaying, isScreenFocused, post.id, stopThisVideo, player]);
 
   const renderMedia = useMemo(() => {
     console.log(`📸 Rendering media for post ${post.id}, images:`, post.images);
@@ -214,26 +220,15 @@ function CompactPostCard({ post, index = 0, isVisible = true, onPress }: Compact
     console.log(`📸 Media URL for post ${post.id}:`, mediaUrl);
     const isVideo = isVideoUrl(mediaUrl);
 
-    if (isVideo) {
+    if (isVideo && mediaUrl === firstVideoUrl) {
       return (
         <View style={styles.mediaContainer}>
-          <Video
-            ref={videoRef}
-            source={{ uri: mediaUrl }}
+          <VideoView
             style={styles.media}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isVideoPlaying && isScreenFocused}
-            isLooping
-            isMuted={false}
-            onError={e => console.error(`📹 Video error for post ${post.id}:`, e)}
-            onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-              if (status.isLoaded) {
-                const shouldPlay = isVideoPlaying && isScreenFocused;
-                if (status.isPlaying !== shouldPlay) {
-                  console.log(`📹 Video ${post.id} status mismatch: isPlaying=${status.isPlaying}, shouldPlay=${shouldPlay}`);
-                }
-              }
-            }}
+            player={player}
+            allowsFullscreen={false}
+            allowsPictureInPicture={false}
+            nativeControls={false}
           />
           <TouchableOpacity
             style={styles.videoOverlay}

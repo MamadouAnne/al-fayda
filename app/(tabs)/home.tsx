@@ -1,4 +1,4 @@
-import { View, FlatList, ScrollView, Text, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, RefreshControl } from 'react-native';
+import { View, FlatList, ScrollView, Text, TouchableOpacity, StatusBar, StyleSheet, Dimensions, Image, RefreshControl, Platform } from 'react-native';
 import { TRENDING_TOPICS } from '@/constants/MockData';
 import PostCard from '@/components/feed/PostCard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,33 @@ import { getAvatarUrl, getPostImageUrls, getStoryMediaUrl } from '@/lib/supabase
 import { useAuth } from '@/contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
+
+// Simple date formatter to avoid Hermes Intl memory issues
+const formatTimestamp = (dateString: string): string => {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffHours < 1) {
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      return diffMins < 1 ? 'now' : `${diffMins}m`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h`;
+    } else if (diffDays < 7) {
+      return `${diffDays}d`;
+    } else {
+      // Simple format without locale
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}/${day}`;
+    }
+  } catch (error) {
+    return 'now';
+  }
+};
 
 // Global tab bar visibility state
 let globalTabBarVisibility = true;
@@ -32,7 +59,8 @@ export const subscribeToTabBarVisibility = (callback: (visible: boolean) => void
 
 export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // Remove currentTime to reduce memory pressure
+  // const [currentTime, setCurrentTime] = useState(new Date());
   const [posts, setPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
   const [groupedStories, setGroupedStories] = useState<any[]>([]);
@@ -40,10 +68,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [visiblePosts, setVisiblePosts] = useState<Set<string>>(new Set());
   const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const floatingAnimation = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
-  const scrollDirection = useRef(new Animated.Value(0)).current; // 0 = down (show), 1 = up (hide)
   const router = useRouter();
   const { profile } = useAuth();
 
@@ -51,52 +76,59 @@ export default function HomeScreen() {
   const loadPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await postsApi.getPosts(20, 0);
-      console.log('🔍 Raw posts data:', data);
-      console.log('📊 Number of posts fetched:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('👥 Users in posts:', data.map(p => ({ id: p.user?.id, name: p.user?.name })));
+      
+      // Clear existing data first to free memory
+      setPosts([]);
+      setStories([]);
+      setGroupedStories([]);
+      
+      // Small delay to allow garbage collection
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Load posts first (very small dataset to reduce memory)
+      const data = await postsApi.getPosts(5, 0); // Reduced to 5 posts
+      
+      if (!data || data.length === 0) {
+        return;
       }
       
-      // Transform the data to match the expected format
-      const transformedPosts = data.map(post => ({
-        id: post.id,
-        user: {
-          id: post.user.id,
-          name: post.user.name,
-          username: post.user.username,
-          avatar: getAvatarUrl(post.user.avatar),
-          verified: post.user.verified || false,
-          location: post.location
-        },
-        images: getPostImageUrls(post.images) || [],
-        caption: post.content,
-        likes: post.likes?.length || 0,
-        timestamp: new Date(post.created_at).toLocaleString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          day: 'numeric',
-          month: 'short'
-        }),
-        location: post.location,
-        tags: post.tags || [],
-        comments: []
-      }));
+      // Transform the data with minimal processing to reduce memory
+      const transformedPosts = data.map(post => {
+        // Process images carefully to avoid memory spikes
+        const images = post.images ? getPostImageUrls(post.images.slice(0, 3)) : []; // Limit to 3 images max
+        
+        return {
+          id: post.id,
+          user: {
+            id: post.user.id,
+            name: post.user.name || 'User',
+            username: post.user.username || 'user',
+            avatar: post.user.avatar ? getAvatarUrl(post.user.avatar) : null,
+            verified: post.user.verified || false,
+            location: post.location
+          },
+          images,
+          caption: post.content ? post.content.slice(0, 500) : '', // Limit caption length
+          likes: post.likes?.length || 0,
+          timestamp: formatTimestamp(post.created_at),
+          location: post.location,
+          tags: [], // Remove tags to reduce memory
+          comments: []
+        };
+      });
       
       setPosts(transformedPosts);
       
-      // Load stories
-      const storiesData = await storiesApi.getStories();
-      console.log('📸 Raw stories data:', storiesData);
-      console.log('📊 Number of stories fetched:', storiesData?.length || 0);
-      if (storiesData && storiesData.length > 0) {
-        console.log('👥 Users in stories:', storiesData.map(s => ({ id: s.user?.id, name: s.user?.name })));
-      }
-      setStories(storiesData);
-      
-      // Group stories by user
-      const grouped = storiesData.reduce((acc: any[], story: any) => {
+      // Load stories in background after posts are rendered (limit stories)
+      setTimeout(async () => {
+        try {
+          const storiesData = await storiesApi.getStories();
+          // Limit stories to reduce memory usage
+          const limitedStories = storiesData.slice(0, 10);
+          setStories(limitedStories);
+          
+          // Group stories by user
+          const grouped = limitedStories.reduce((acc: any[], story: any) => {
         const existingUser = acc.find(group => group.user_id === story.user_id);
         if (existingUser) {
           existingUser.stories.push(story);
@@ -114,12 +146,19 @@ export default function HomeScreen() {
             story_count: 1
           });
         }
-        return acc;
-      }, []);
+            return acc;
+          }, []);
+          
+          // Sort by most recent story
+          grouped.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          setGroupedStories(grouped);
+        } catch (storyError) {
+          // Fail silently to avoid crashes
+          setStories([]);
+          setGroupedStories([]);
+        }
+      }, 3000); // Load stories 3 seconds after posts to reduce memory pressure
       
-      // Sort by most recent story
-      grouped.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setGroupedStories(grouped);
     } catch (error) {
       console.error('Error loading posts:', error);
       // Fallback to empty array if API fails
@@ -134,67 +173,24 @@ export default function HomeScreen() {
   useEffect(() => {
     loadPosts();
     
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    // Remove timer to reduce memory pressure
+    // const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     
-    // Floating animation for background elements
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatingAnimation, {
-          toValue: 1,
-          duration: 4000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatingAnimation, {
-          toValue: 0,
-          duration: 4000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Listen to scroll changes for bottom navigation animation
-    const scrollListener = scrollY.addListener(({ value }) => {
-      const currentScrollY = value;
-      const scrollDiff = currentScrollY - lastScrollY.current;
-      
-      // Ultra responsive - trigger on any scroll movement (> 1px)
-      if (Math.abs(scrollDiff) > 1) {
-        if (scrollDiff > 0 && currentScrollY > 10) {
-          // Scrolling up - hide bottom navigation immediately
-          setTabBarVisible(false);
-          Animated.timing(scrollDirection, {
-            toValue: 1,
-            duration: 150, // Even faster animation
-            useNativeDriver: true,
-          }).start();
-        } else if (scrollDiff < 0) {
-          // Scrolling down - show bottom navigation immediately
-          setTabBarVisible(true);
-          Animated.timing(scrollDirection, {
-            toValue: 0,
-            duration: 150, // Even faster animation
-            useNativeDriver: true,
-          }).start();
-        }
-        lastScrollY.current = currentScrollY;
-      }
-    });
+    // Note: We use the optimized handleScrollOptimized function defined later
 
     // Subscribe to real-time post updates
-    const postSubscription = subscriptions.subscribeToposts((payload) => {
-      console.log('New post received:', payload);
+    const postSubscription = subscriptions.subscribeToposts(() => {
       // Reload posts when new post is created
       loadPosts();
     });
 
     return () => {
-      clearInterval(timer);
-      scrollY.removeListener(scrollListener);
+      // clearInterval(timer);
       if (postSubscription) {
         postSubscription.unsubscribe();
       }
     };
-  }, [loadPosts, scrollY, scrollDirection]);
+  }, [loadPosts]);
 
   // Handle screen focus/blur to pause videos when navigating away
   useFocusEffect(
@@ -227,96 +223,37 @@ export default function HomeScreen() {
     
     const newVisiblePosts = new Set<string>(visiblePosts);
     
-    // Simple logging
-    if (visiblePosts.length > 0) {
-      console.log('📱 Visible posts:', visiblePosts);
-    }
+    // Track visible posts for video playback
     
     setVisiblePosts(newVisiblePosts);
   }, []);
 
-  // Viewability config for FlatList
+  // Optimized viewability config to reduce memory
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 30, // Post is visible when 30% of the item is shown
-    minimumViewTime: 50, // Wait 50ms before considering item visible/invisible
-    waitForInteraction: false, // Don't wait for user interaction to stop
+    itemVisiblePercentThreshold: 50, // Higher threshold to reduce processing
+    minimumViewTime: 200, // Longer wait time to reduce frequency
+    waitForInteraction: false,
   }).current;
 
-  const headerScale = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp',
-  });
-
-
-  const floatingY = floatingAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -10],
-  });
-
-  const storyBarTranslateY = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, -150],
-    extrapolate: 'clamp',
-  });
-
-  const storyBarOpacity = scrollY.interpolate({
-    inputRange: [0, 50, 100],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Background parallax animations
-  const backgroundParallax1 = scrollY.interpolate({
-    inputRange: [0, 300],
-    outputRange: [0, -50],
-    extrapolate: 'clamp',
-  });
-
-  const backgroundParallax2 = scrollY.interpolate({
-    inputRange: [0, 400],
-    outputRange: [0, 80],
-    extrapolate: 'clamp',
-  });
-
-  const backgroundParallax3 = scrollY.interpolate({
-    inputRange: [0, 200],
-    outputRange: [0, -30],
-    extrapolate: 'clamp',
-  });
-
-  const backgroundScale = scrollY.interpolate({
-    inputRange: [0, 500],
-    outputRange: [1, 1.2],
-    extrapolate: 'clamp',
-  });
-
-  // Header scroll animations
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, 150],
-    outputRange: [0, -100],
-    extrapolate: 'clamp',
-  });
-
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100, 150],
-    outputRange: [1, 0.7, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Main background scroll animation
-  const backgroundTranslateY = scrollY.interpolate({
-    inputRange: [0, 400],
-    outputRange: [0, -100],
-    extrapolate: 'clamp',
-  });
-
-  const getGreeting = () => {
-    const hour = currentTime.getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  };
+  const handleScrollOptimized = useCallback((event: any) => {
+    // Completely disable tab bar visibility changes on Android for older devices
+    if (Platform.OS === 'android') {
+      return;
+    }
+    
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+    const scrollDiff = currentScrollY - lastScrollY.current;
+    
+    // iOS only - smooth tab bar visibility changes
+    if (Math.abs(scrollDiff) > 30) {
+      if (scrollDiff > 0 && currentScrollY > 50) {
+        setTabBarVisible(false);
+      } else if (scrollDiff < 0) {
+        setTabBarVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    }
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -329,133 +266,50 @@ export default function HomeScreen() {
           style={StyleSheet.absoluteFillObject}
         />
         
-        {/* Flowing Geometric Shapes */}
-        <Animated.View 
-          style={[
-            styles.morphShape1,
-            { 
-              transform: [
-                { translateY: Animated.add(floatingY, backgroundParallax1) },
-                { scale: backgroundScale },
-                { rotate: floatingAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0deg', '360deg'],
-                }) }
-              ] 
-            }
-          ]}
-        />
-        <Animated.View 
-          style={[
-            styles.morphShape2,
-            { 
-              transform: [
-                { 
-                  translateX: floatingAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-20, 20],
-                  }) 
-                },
-                { translateY: backgroundParallax2 },
-                { 
-                  scale: Animated.multiply(
-                    floatingAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.2],
-                    }),
-                    backgroundScale
-                  )
-                }
-              ] 
-            }
-          ]}
-        />
-        <Animated.View 
-          style={[
-            styles.morphShape3,
-            { 
-              transform: [
-                { 
-                  translateY: Animated.add(
-                    floatingAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [15, -15],
-                    }),
-                    backgroundParallax3
-                  )
-                },
-                { scale: backgroundScale },
-                { 
-                  rotate: floatingAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['360deg', '0deg'],
-                  }) 
-                }
-              ] 
-            }
-          ]}
-        />
-        
-        {/* Mesh Gradient Overlay */}
-        <LinearGradient
-          colors={['rgba(255,107,107,0.1)', 'transparent', 'rgba(78,205,196,0.1)']}
-          style={StyleSheet.absoluteFillObject}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
+        {Platform.OS === 'ios' && (
+          <>
+            {/* Static Geometric Shapes - iOS only for performance */}
+            <View style={styles.morphShape1} />
+            <View style={styles.morphShape2} />
+            <View style={styles.morphShape3} />
+            
+            {/* Mesh Gradient Overlay - iOS only */}
+            <LinearGradient
+              colors={['rgba(255,107,107,0.1)', 'transparent', 'rgba(78,205,196,0.1)']}
+              style={StyleSheet.absoluteFillObject}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+          </>
+        )}
       </View>
 
       {/* Immersive Content Flow */}
-      <Animated.FlatList
+      <FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
+        // Memory optimization props - more aggressive on Android
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={Platform.OS === 'ios' ? 2 : 1}
+        updateCellsBatchingPeriod={Platform.OS === 'ios' ? 100 : 200}
+        initialNumToRender={Platform.OS === 'ios' ? 3 : 2}
+        windowSize={Platform.OS === 'ios' ? 5 : 3}
+        getItemLayout={(data, index) => (
+          { length: 500, offset: 500 * index, index }
+        )}
         ListHeaderComponent={() => (
           <View>
             {/* Content spacer for header */}
             <View style={styles.headerSpacer} />
             
             {/* Futuristic Header Design */}
-            <Animated.View 
-              style={[
-                styles.futuristicHeader,
-                {
-                  transform: [{ translateY: headerTranslateY }],
-                  opacity: headerOpacity,
-                }
-              ]}
-            >
+            <View style={styles.futuristicHeader}>
               <BlurView intensity={20} style={styles.headerBlurContainer}>
                 <View style={styles.headerContent}>
-                  <View style={styles.brandSection}>
-                    <View style={styles.brandIcon}>
-                      <LinearGradient
-                        colors={['#FF6B6B', '#4ECDC4']}
-                        style={styles.brandIconGradient}
-                      >
-                        <Text style={styles.brandInitial}>A</Text>
-                      </LinearGradient>
-                    </View>
-                    <View style={styles.brandTextContainer}>
-                      <Text style={styles.brandName}>AL-Fayda</Text>
-                      <Text style={styles.brandSubtitle}>{getGreeting()}</Text>
-                    </View>
-                  </View>
-                  
                   <View style={styles.headerActions}>
                     <TouchableOpacity style={styles.searchButton}>
                       <BlurView intensity={30} style={styles.actionButtonBlur}>
                         <Ionicons name="search" size={20} color="white" />
-                      </BlurView>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.messageButton}
-                      onPress={() => router.push('/(tabs)/messages')}
-                    >
-                      <BlurView intensity={30} style={styles.actionButtonBlur}>
-                        <Ionicons name="mail-outline" size={20} color="white" />
-                        <View style={styles.messageBadge}>
-                          <Text style={styles.badgeText}>2</Text>
-                        </View>
                       </BlurView>
                     </TouchableOpacity>
                     <TouchableOpacity 
@@ -469,21 +323,24 @@ export default function HomeScreen() {
                         </View>
                       </BlurView>
                     </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.messageButton}
+                      onPress={() => router.push('/(tabs)/messages')}
+                    >
+                      <BlurView intensity={30} style={styles.actionButtonBlur}>
+                        <Ionicons name="mail-outline" size={20} color="white" />
+                        <View style={styles.messageBadge}>
+                          <Text style={styles.badgeText}>2</Text>
+                        </View>
+                      </BlurView>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </BlurView>
-            </Animated.View>
+            </View>
 
             {/* Neo-Morphic Story Constellation */}
-            <Animated.View 
-              style={[
-                styles.storyConstellation,
-                {
-                  transform: [{ translateY: storyBarTranslateY }],
-                  opacity: storyBarOpacity,
-                }
-              ]}
-            >
+            <View style={styles.storyConstellation}>
               {/* Story Bar Background */}
               <View style={styles.storyBarBackground}>
                 <LinearGradient
@@ -505,7 +362,7 @@ export default function HomeScreen() {
                 >
                   <BlurView intensity={25} style={styles.portalBlur}>
                     <LinearGradient
-                      colors={['rgba(255,107,107,0.3)', 'rgba(78,205,196,0.3)']}
+                      colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.1)']}
                       style={styles.portalGradient}
                     >
                       {profile && (
@@ -563,7 +420,7 @@ export default function HomeScreen() {
                         colors={storyGroup.stories.some((s: any) => viewedStories.has(s.id)) && 
                                 storyGroup.stories.every((s: any) => viewedStories.has(s.id))
                           ? ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']
-                          : ['#FF6B6B', '#4ECDC4']
+                          : ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']
                         }
                         style={styles.orbGradientRing}
                       >
@@ -588,7 +445,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </Animated.View>
+            </View>
           </View>
         )}
         renderItem={({ item, index }) => (
@@ -602,19 +459,16 @@ export default function HomeScreen() {
             </BlurView>
           </View>
         )}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
+        onScroll={handleScrollOptimized}
+        scrollEventThrottle={Platform.OS === 'ios' ? 16 : 100}
         onViewableItemsChanged={handleViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#FF6B6B"
-            colors={['#FF6B6B', '#4ECDC4']}
+            tintColor="rgba(255,255,255,0.8)"
+            colors={['rgba(255,255,255,0.8)', 'rgba(255,255,255,0.6)']}
           />
         }
         contentContainerStyle={styles.immersiveFeedContainer}
@@ -624,7 +478,7 @@ export default function HomeScreen() {
           !loading ? (
             <BlurView intensity={20} style={styles.emptyStateContainer}>
               <LinearGradient
-                colors={['rgba(255,107,107,0.2)', 'rgba(78,205,196,0.2)']}
+                colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
                 style={styles.emptyStateGradient}
               >
                 <Text style={styles.emptyStateText}>Your Canvas Awaits</Text>
@@ -643,7 +497,7 @@ export default function HomeScreen() {
         >
           <BlurView intensity={30} style={styles.portalButtonBlur}>
             <LinearGradient
-              colors={['#FF6B6B', '#4ECDC4']}
+              colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.15)']}
               style={styles.portalButtonGradient}
             >
               <Ionicons name="add" size={28} color="white" />
@@ -718,41 +572,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  brandSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  brandIcon: {
-    marginRight: 12,
-  },
-  brandIconGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandInitial: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  brandTextContainer: {
-    flex: 1,
-  },
-  brandName: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  brandSubtitle: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
-  },
   headerActions: {
     flexDirection: 'row',
     gap: 12,
@@ -780,30 +599,30 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   notificationDot: {
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   badgeText: {
-    color: 'white',
+    color: 'black',
     fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
@@ -811,7 +630,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
@@ -933,17 +752,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 12,
     minWidth: 24,
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'white',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   orbMultiText: {
-    color: 'white',
+    color: 'black',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1023,7 +842,7 @@ const styles = StyleSheet.create({
   portalCreateButton: {
     borderRadius: 30,
     overflow: 'hidden',
-    shadowColor: '#FF6B6B',
+    shadowColor: 'rgba(255,255,255,0.3)',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 20,

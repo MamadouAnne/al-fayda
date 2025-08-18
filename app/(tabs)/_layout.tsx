@@ -1,11 +1,12 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { 
   View, 
   TouchableOpacity, 
   Text, 
   StyleSheet, 
-  Animated
+  Animated,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,37 +21,49 @@ interface TabBarProps {
   navigation: any;
 }
 
-function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
+function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const tabBarAnimation = useRef(new Animated.Value(0)).current; // 0 = visible, 1 = hidden
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatingAnimation, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatingAnimation, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Subscribe to tab bar visibility changes
+    // Subscribe to tab bar visibility changes only
     const unsubscribe = subscribeToTabBarVisibility((visible) => {
-      Animated.timing(tabBarAnimation, {
-        toValue: visible ? 0 : 1,
-        duration: 150, // Ultra fast animation
-        useNativeDriver: true,
-      }).start();
+      // Disable tab bar animations completely on Android for better performance
+      if (Platform.OS === 'ios') {
+        Animated.timing(tabBarAnimation, {
+          toValue: visible ? 0 : 1,
+          duration: 150,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        // On Android, just set the value directly without animation
+        tabBarAnimation.setValue(visible ? 0 : 1);
+      }
     });
 
+    // Start subtle floating animation after app is fully loaded (iOS only)
+    const animationTimeout = Platform.OS === 'ios' ? setTimeout(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatingAnimation, {
+            toValue: 1,
+            duration: 8000, // Much slower to reduce CPU usage
+            useNativeDriver: true,
+          }),
+          Animated.timing(floatingAnimation, {
+            toValue: 0,
+            duration: 8000, // Much slower to reduce CPU usage
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }, 5000) : null; // Disable on Android to prevent scroll freeze
+
     return () => {
+      if (animationTimeout) {
+        clearTimeout(animationTimeout);
+      }
       unsubscribe();
     };
   }, [tabBarAnimation]);
@@ -66,8 +79,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
     outputRange: [1, 0],
   });
 
-  // Consistent gradient for all selected tabs
-  const activeGradient = ['#667eea', '#764ba2'];
+  // Consistent gradient for all selected tabs with glassmorphism design
+  const activeGradient = ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'];
   
   const tabInfo = [
     { 
@@ -149,14 +162,14 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                   key={route.name}
                   style={[
                     styles.tabItem,
-                    {
+                    Platform.OS === 'ios' ? {
                       transform: [{
                         translateY: floatingAnimation.interpolate({
                           inputRange: [0, 1],
                           outputRange: [0, index % 2 === 0 ? -1 : 1],
                         })
                       }]
-                    }
+                    } : {} // No floating animation on Android
                   ]}
                 >
                   <TouchableOpacity
@@ -165,11 +178,28 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                     activeOpacity={0.8}
                   >
                     {isFocused ? (
-                      <LinearGradient
-                        colors={tabData.gradient as [string, string]}
-                        style={styles.activeTabGradient}
-                      >
-                        <BlurView intensity={10} tint="light" style={styles.activeTabBlur}>
+                      Platform.OS === 'ios' ? (
+                        <LinearGradient
+                          colors={tabData.gradient as [string, string]}
+                          style={styles.activeTabGradient}
+                        >
+                          <BlurView intensity={10} tint="light" style={styles.activeTabBlur}>
+                            <View style={styles.tabContent}>
+                              <View style={styles.iconContainer}>
+                                <Ionicons 
+                                  name={tabData.activeIcon as any} 
+                                  size={22} 
+                                  color="white" 
+                                />
+                              </View>
+                              <Text style={styles.activeTabLabel}>{tabData.label}</Text>
+                              <View style={styles.activeIndicator} />
+                            </View>
+                          </BlurView>
+                        </LinearGradient>
+                      ) : (
+                        // Simplified Android version - no gradients or complex effects
+                        <View style={styles.androidActiveTabSimple}>
                           <View style={styles.tabContent}>
                             <View style={styles.iconContainer}>
                               <Ionicons 
@@ -181,8 +211,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                             <Text style={styles.activeTabLabel}>{tabData.label}</Text>
                             <View style={styles.activeIndicator} />
                           </View>
-                        </BlurView>
-                      </LinearGradient>
+                        </View>
+                      )
                     ) : (
                       <View style={styles.inactiveTab}>
                         <View style={styles.tabContent}>
@@ -368,5 +398,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 1,
     opacity: 0.8,
+  },
+  androidActiveTab: {
+    backgroundColor: 'rgba(255,255,255,0.15)', // Solid background instead of blur on Android
+  },
+  androidActiveTabSimple: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    // No shadows, gradients, or complex effects for older Android devices
   },
 });

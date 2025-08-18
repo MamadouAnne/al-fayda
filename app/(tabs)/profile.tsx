@@ -212,41 +212,36 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('📱 Profile screen gained focus');
       setIsScreenFocused(true);
       
       const refreshData = async () => {
         if (!currentUser) return;
         
-        // Throttle refresh calls - only allow one every 2 seconds
+        // Throttle refresh calls - only allow one every 30 seconds
         const now = Date.now();
-        if (now - lastRefreshTime.current < 2000) {
-          console.log('Skipping refresh - too soon since last refresh');
+        if (now - lastRefreshTime.current < 30000) {
           return;
         }
         
         lastRefreshTime.current = now;
-        console.log('Profile screen focused - refreshing data');
-        console.log(' Current user avatar before refresh:', currentUser.avatar);
         
         try {
           await refreshProfile();
           await loadUserData();
-          console.log(' Current user avatar after refresh:', currentUser.avatar);
         } catch (error) {
-          console.error('Error refreshing data on focus:', error);
+          // Silent error handling to prevent console spam
         }
       };
       
+      // Only refresh if it's been a while since last refresh
       refreshData();
       
       return () => {
-        console.log('📱 Profile screen lost focus - stopping all videos');
         setIsScreenFocused(false);
         // Force reset visible post index to ensure videos stop when leaving screen
         setVisiblePostIndex(-1);
       };
-    }, [currentUser?.id])
+    }, []) // Remove currentUser?.id dependency to prevent loops
   );
 
   const handleShareProfile = () => {
@@ -322,7 +317,7 @@ export default function ProfileScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={['#0f0f23', '#1a1a2e', '#16213e']}
           style={StyleSheet.absoluteFillObject}
         />
         <View style={styles.loadingContainer}>
@@ -336,7 +331,7 @@ export default function ProfileScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={['#0f0f23', '#1a1a2e', '#16213e']}
           style={StyleSheet.absoluteFillObject}
         />
         <View style={styles.errorContainer}>
@@ -475,13 +470,13 @@ export default function ProfileScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#0f0f23', '#1a1a2e', '#16213e']}
         style={StyleSheet.absoluteFillObject}
       />
 
       {/* Fixed Header */}
       <View style={styles.header}>
-        <BlurView intensity={15} tint="dark" style={styles.headerBlur}>
+        <BlurView intensity={1} tint="dark" style={styles.headerBlur}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={24} color="white" />
@@ -539,7 +534,7 @@ export default function ProfileScreen() {
           {/* Profile Card with Gradient Background */}
           <View style={styles.profileCard}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.06)']}
+              colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
               style={styles.profileCardGradient}
             >
               
@@ -547,7 +542,7 @@ export default function ProfileScreen() {
               <View style={styles.profileHeader}>
                 <View style={styles.avatarWrapper}>
                   <LinearGradient
-                    colors={['#667eea', '#764ba2', '#f093fb', '#f5576c']}
+                    colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.15)']}
                     style={styles.avatarRing}
                   >
                     {displayUser?.avatar ? (
@@ -567,7 +562,7 @@ export default function ProfileScreen() {
                   </LinearGradient>
                   {displayUser?.verified && (
                     <View style={styles.verifiedBadge}>
-                      <Ionicons name="checkmark" size={12} color="white" />
+                      <Ionicons name="checkmark" size={12} color="black" />
                     </View>
                   )}
                 </View>
@@ -607,7 +602,7 @@ export default function ProfileScreen() {
               {displayUser?.website && (
                 <TouchableOpacity style={styles.websiteSection}>
                   <View style={styles.websiteIconWrapper}>
-                    <Ionicons name="link" size={14} color="#4ECDC4" />
+                    <Ionicons name="link" size={14} color="rgba(255,255,255,0.8)" />
                   </View>
                   <Text style={styles.websiteText}>{displayUser.website}</Text>
                 </TouchableOpacity>
@@ -619,7 +614,7 @@ export default function ProfileScreen() {
           {/* Stats Card */}
           <View style={styles.statsCard}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
+              colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
               style={styles.statsCardGradient}
             >
               
@@ -722,7 +717,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0f0f23',
   },
   loadingContainer: {
     flex: 1,
@@ -909,24 +904,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(78, 205, 196, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   websiteIconWrapper: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   websiteText: {
-    color: '#4ECDC4',
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1166,10 +1161,10 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#4ECDC4',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'white',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
 });
