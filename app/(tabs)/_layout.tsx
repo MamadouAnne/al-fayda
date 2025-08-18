@@ -5,9 +5,7 @@ import {
   TouchableOpacity, 
   Text, 
   StyleSheet, 
-  Animated, 
-  Dimensions,
-  Platform
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +13,6 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { subscribeToTabBarVisibility } from './home';
 
-const { width } = Dimensions.get('window');
 
 interface TabBarProps {
   state: any;
@@ -27,7 +24,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const floatingAnimation = useRef(new Animated.Value(0)).current;
   const tabBarAnimation = useRef(new Animated.Value(0)).current; // 0 = visible, 1 = hidden
-  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     Animated.loop(
@@ -47,7 +43,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 
     // Subscribe to tab bar visibility changes
     const unsubscribe = subscribeToTabBarVisibility((visible) => {
-      setIsVisible(visible);
       Animated.timing(tabBarAnimation, {
         toValue: visible ? 0 : 1,
         duration: 150, // Ultra fast animation
@@ -60,10 +55,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
     };
   }, [tabBarAnimation]);
 
-  const floatingY = floatingAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -2],
-  });
 
   const tabBarTranslateY = tabBarAnimation.interpolate({
     inputRange: [0, 1],
@@ -101,22 +92,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       gradient: activeGradient
     },
     { 
-      name: 'notifications', 
-      icon: 'notifications-outline', 
-      activeIcon: 'notifications', 
-      label: 'Alerts',
-      gradient: activeGradient,
-      badge: 3
-    },
-    { 
-      name: 'messages', 
-      icon: 'mail-outline', 
-      activeIcon: 'mail', 
-      label: 'Messages',
-      gradient: activeGradient,
-      badge: 2
-    },
-    { 
       name: 'profile', 
       icon: 'person-outline', 
       activeIcon: 'person', 
@@ -152,7 +127,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       {/* Tab bar content */}
       <View style={styles.tabBarContent}>
             {state.routes.map((route: any, index: number) => {
-              const { options } = descriptors[route.key];
               const isFocused = state.index === index;
               const tabData = tabInfo.find(tab => tab.name === route.name);
 
@@ -203,11 +177,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                                 size={22} 
                                 color="white" 
                               />
-                              {tabData.badge && (
-                                <View style={styles.badge}>
-                                  <Text style={styles.badgeText}>{tabData.badge}</Text>
-                                </View>
-                              )}
                             </View>
                             <Text style={styles.activeTabLabel}>{tabData.label}</Text>
                             <View style={styles.activeIndicator} />
@@ -223,11 +192,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                               size={20} 
                               color="rgba(255,255,255,0.7)" 
                             />
-                            {tabData.badge && (
-                              <View style={styles.badge}>
-                                <Text style={styles.badgeText}>{tabData.badge}</Text>
-                              </View>
-                            )}
                           </View>
                           <Text style={styles.inactiveTabLabel}>{tabData.label}</Text>
                         </View>
@@ -270,18 +234,6 @@ export default function TabLayout() {
         name="friends"
         options={{
           title: 'Friends',
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Notifications',
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: 'Messages',
         }}
       />
       <Tabs.Screen
@@ -392,25 +344,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'white',
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   activeTabLabel: {
     color: 'white',

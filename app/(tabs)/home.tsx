@@ -447,10 +447,26 @@ export default function HomeScreen() {
                         <Ionicons name="search" size={20} color="white" />
                       </BlurView>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.notificationButton}>
+                    <TouchableOpacity 
+                      style={styles.messageButton}
+                      onPress={() => router.push('/(tabs)/messages')}
+                    >
                       <BlurView intensity={30} style={styles.actionButtonBlur}>
-                        <Ionicons name="notifications" size={20} color="white" />
-                        <View style={styles.notificationDot} />
+                        <Ionicons name="mail-outline" size={20} color="white" />
+                        <View style={styles.messageBadge}>
+                          <Text style={styles.badgeText}>2</Text>
+                        </View>
+                      </BlurView>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.notificationButton}
+                      onPress={() => router.push('/(tabs)/notifications')}
+                    >
+                      <BlurView intensity={30} style={styles.actionButtonBlur}>
+                        <Ionicons name="notifications-outline" size={20} color="white" />
+                        <View style={styles.notificationDot}>
+                          <Text style={styles.badgeText}>3</Text>
+                        </View>
                       </BlurView>
                     </TouchableOpacity>
                   </View>
@@ -745,6 +761,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
+  messageButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
   notificationButton: {
     borderRadius: 20,
     overflow: 'hidden',
@@ -756,14 +776,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
+  messageBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'white',
+  },
   notificationDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 6,
+    right: 6,
     backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   headerContent: {
     flexDirection: 'row',
