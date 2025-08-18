@@ -238,9 +238,11 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     // Video can play if user wants it to play AND it's the current image
     // Use more permissive visibility check - allow early posts or explicitly visible posts
     const isEffectivelyVisible = isVisible || (index !== undefined && index <= 2 && !hasBeenVisibleRef.current);
-    const result = isVideoPlaying && currentImageIndex === 0 && isEffectivelyVisible;
+    const currentMedia = post.images[currentImageIndex] || '';
+    const isCurrentMediaVideo = isVideoUrl(currentMedia);
+    const result = isVideoPlaying && isCurrentMediaVideo && isEffectivelyVisible;
     return result;
-  }, [isVideoPlaying, currentImageIndex, isVisible, index, post.id]);
+  }, [isVideoPlaying, currentImageIndex, isVisible, index, post.id, post.images]);
 
   // Control video player based on shouldPlayVideo
   useEffect(() => {
@@ -251,22 +253,50 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
       const shouldPlay = shouldPlayVideoForCurrentImage && currentImageIsVideo && isMainVideo;
       
       if (shouldPlay) {
+        console.log('Playing video:', currentImageUrl);
         mainPlayer.play();
       } else {
+        console.log('Pausing video');
         mainPlayer.pause();
       }
     }
   }, [shouldPlayVideoForCurrentImage, currentImageIndex, videoUrls, mainPlayer, post.images]);
 
+  useEffect(() => {
+    console.log('PostCard rendered with post:', {
+      id: post.id,
+      images: post.images,
+      hasImages: post.images && post.images.length > 0,
+      currentImageIndex,
+      isVisible,
+      index
+    });
+  }, [post, currentImageIndex, isVisible, index]);
+
   const renderMedia = useCallback((mediaUrl: string, imgIndex: number) => {
     const isVideo = isVideoUrl(mediaUrl);
+    const isCurrentImage = imgIndex === currentImageIndex;
     
+    console.log(`Rendering media ${imgIndex} (${isVideo ? 'video' : 'image'}):`, {
+      mediaUrl,
+      isCurrentImage,
+      isVideoPlaying
+    });
+
+    if (!mediaUrl) {
+      return (
+        <View key={`media-${imgIndex}`} style={styles.noImageContainer}>
+          <Ionicons name="image-outline" size={40} color="rgba(255,255,255,0.3)" />
+        </View>
+      );
+    }
 
     if (isVideo) {
       const videoPlayer = getPlayerForVideo(mediaUrl);
+      const shouldShowVideo = isCurrentImage && isVideoPlaying;
       
+      // Always render the video player when it's the current image
       if (videoPlayer) {
-        // Render with video player (for main video)
         return (
           <View key={`media-${imgIndex}`} style={styles.videoContainer}>
             <VideoView
@@ -275,6 +305,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
               allowsFullscreen={false}
               allowsPictureInPicture={false}
               nativeControls={false}
+              contentFit="cover"
             />
             <TouchableOpacity
               style={[styles.playOverlay, isVideoPlaying && { backgroundColor: 'transparent' }]}
@@ -290,13 +321,14 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
           </View>
         );
       } else {
-        // Render as image with video icon overlay (for additional videos)
+        // Fallback to image with video icon
         return (
           <TouchableOpacity key={`media-${imgIndex}`} onPress={handlePostPress}>
             <Image
               source={{ uri: mediaUrl }}
               style={styles.postImage}
               onError={() => {}}
+              resizeMode="cover"
             />
             <View style={styles.videoIndicatorOverlay}>
               <Ionicons name="play-circle" size={50} color="rgba(255,255,255,0.8)" />
@@ -305,14 +337,19 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
         );
       }
     } else {
+      console.log('Rendering image:', mediaUrl);
       return (
-        <TouchableOpacity key={`media-${imgIndex}`} onPress={handlePostPress}>
+        <View key={`media-${imgIndex}`} style={styles.imageContainer}>
           <Image
             source={{ uri: mediaUrl }}
             style={styles.postImage}
-            onError={() => {}}
+            resizeMode="cover"
+            onError={(e) => {
+              console.log('Error loading image:', mediaUrl, e.nativeEvent.error);
+            }}
+            onLoad={() => console.log('Image loaded successfully:', mediaUrl)}
           />
-        </TouchableOpacity>
+        </View>
       );
     }
   }, [currentImageIndex, shouldPlayVideoForCurrentImage, post.id, handlePostPress, togglePlayPause, isVideoPlaying, getPlayerForVideo]);
@@ -362,7 +399,9 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={onScroll}
             style={styles.imageScrollView}
+            contentContainerStyle={styles.scrollViewContent}
             scrollEventThrottle={16}
+            decelerationRate="fast"
           >
             {post.images.map((mediaUrl, imgIndex) => renderMedia(mediaUrl, imgIndex))}
           </ScrollView>
@@ -537,15 +576,34 @@ const styles = StyleSheet.create({
   },
   imageSection: {
     position: 'relative',
+    width: '100%',
+    marginVertical: 8,
   },
   imageScrollView: {
-    height: width * 0.56, // Match the video height for consistent layout
+    width: '100%',
+  },
+  scrollViewContent: {
+    flexDirection: 'row',
+    paddingHorizontal: 0,
+  },
+  imageContainer: {
+    width: width,
+    aspectRatio: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   postImage: {
-    width: '100%', // Take full width of the parent container
-    height: width * 0.56, // 16:9 aspect ratio for more modern video format
-    borderRadius: 12, // Add rounded corners for better design
-    marginHorizontal: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
+    resizeMode: 'cover',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   indicatorContainer: {
     flexDirection: 'row',
@@ -638,19 +696,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   noImageContainer: {
-    height: 200,
+    width: '100%',
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 12,
   },
   noImageText: {
     color: 'rgba(255,255,255,0.7)',
   },
   videoContainer: {
     position: 'relative',
+    width: width,
+    aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12, // Match the postImage border radius
-    overflow: 'hidden', // Ensure video respects border radius
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
   },
   playOverlay: {
     position: 'absolute',

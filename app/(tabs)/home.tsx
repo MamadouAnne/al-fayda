@@ -94,10 +94,17 @@ export default function HomeScreen() {
       
       // Transform the data with minimal processing to reduce memory
       const transformedPosts = data.map(post => {
+        // Log original post data for debugging
+        console.log('Original post data:', {
+          id: post.id,
+          images: post.images,
+          content: post.content?.substring(0, 100) + '...'
+        });
+        
         // Process images carefully to avoid memory spikes
         const images = post.images ? getPostImageUrls(post.images.slice(0, 3)) : []; // Limit to 3 images max
         
-        return {
+        const transformedPost = {
           id: post.id,
           user: {
             id: post.user.id,
@@ -115,6 +122,15 @@ export default function HomeScreen() {
           tags: [], // Remove tags to reduce memory
           comments: []
         };
+        
+        // Log transformed post for debugging
+        console.log('Transformed post:', {
+          id: transformedPost.id,
+          images: transformedPost.images,
+          hasImages: transformedPost.images.length > 0
+        });
+        
+        return transformedPost;
       });
       
       setPosts(transformedPosts);

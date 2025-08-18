@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard, FlatList } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -63,47 +63,74 @@ const styles = StyleSheet.create({
   
   // Images Section
   imagesSection: {
-    width,
-    height: width * 0.75,
+    width: width,
+    height: width, // Square aspect ratio
+    backgroundColor: '#000',
+    marginBottom: 12,
   },
   imageContainer: {
-    width,
-    height: '100%',
-    position: 'relative',
+    width: width,
+    aspectRatio: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   postImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'contain',
   },
   imageCounter: {
     position: 'absolute',
-    top: 15,
-    right: 15,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 12,
-    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   counterBlur: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   counterText: {
     color: 'white',
-    fontSize: 12,
     fontWeight: '600',
+    fontSize: 12,
+  },
+  noMediaContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+  noMediaText: {
+    color: '#666',
+    marginTop: 8,
+    fontSize: 16,
   },
   dotsContainer: {
     flexDirection: 'row',
     position: 'absolute',
-    bottom: 15,
+    bottom: 20,
     alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    zIndex: 10,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'white',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     marginHorizontal: 3,
+  },
+  activeDot: {
+    backgroundColor: 'white',
+    width: 20,
   },
   
   // User Section
@@ -668,7 +695,16 @@ const styles = StyleSheet.create({
   
   // Video Styles
   videoContainer: {
-    position: 'relative',
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
   },
   videoTapArea: {
     position: 'absolute',
@@ -676,7 +712,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 5,
+    zIndex: 1,
     backgroundColor: 'transparent',
   },
   customControls: {
@@ -687,15 +723,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 15,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 5,
   },
   playPauseButton: {
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
+    padding: 16,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   closeControlsButton: {
     position: 'absolute',
@@ -828,31 +862,75 @@ export default function PostDetailScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showControls, setShowControls] = useState<{ [key: number]: boolean }>({});
   const [playingStates, setPlayingStates] = useState<{ [key: number]: boolean }>({});
-  // Get first video URL for video player
-  const firstVideoUrl = React.useMemo(() => {
-    return post?.images?.find(url => isVideoUrl(url));
-  }, [post?.images]);
+  // Get video URL for the current media item
+  const currentMediaUrl = post?.images?.[currentImageIndex] || '';
+  const firstVideoUrl = post?.images?.find(url => isVideoUrl(url)) || '';
+  const isVideo = currentMediaUrl ? isVideoUrl(currentMediaUrl) : false;
   
-  const player = useVideoPlayer(firstVideoUrl || '', player => {
-    player.loop = true;
-    player.muted = false;
+  // Initialize video player only when needed
+  const player = useVideoPlayer(currentMediaUrl, (player) => {
+    if (!player) return;
+    
+    try {
+      player.loop = true;
+      player.muted = false;
+      
+      // Auto-play when player is ready if it's a video
+      if (isVideo && currentMediaUrl) {
+        // Use setTimeout to ensure the player is ready
+        setTimeout(() => {
+          try {
+            // Directly call play without handling the promise
+            player.play();
+          } catch (e) {
+            console.warn('Error playing video:', e);
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error initializing video player:', error);
+    }
   });
 
-  // Control video playback based on current image
+  // Handle video playback when media changes
   useEffect(() => {
-    if (firstVideoUrl && player && post?.images) {
-      const currentImage = post.images[currentImageIndex];
-      const shouldPlay = currentImage === firstVideoUrl;
-      
-      if (shouldPlay) {
-        player.play();
-        setPlayingStates(prev => ({ ...prev, [currentImageIndex]: true }));
-      } else {
-        player.pause();
-        setPlayingStates(prev => ({ ...prev, [currentImageIndex]: false }));
+    let isMounted = true;
+    
+    const handlePlayback = async (playerInstance: typeof player) => {
+      if (!playerInstance || !isMounted) return;
+
+      try {
+        if (isVideo && currentMediaUrl) {
+          await playerInstance.play();
+          if (isMounted) {
+            setPlayingStates(prev => ({ ...prev, [currentImageIndex]: true }));
+          }
+        } else if (playerInstance) {
+          // Only try to pause if we have a valid player
+          try {
+            await playerInstance.pause();
+          } catch (pauseError) {
+            // Ignore pause errors during cleanup
+          }
+          if (isMounted) {
+            setPlayingStates(prev => ({ ...prev, [currentImageIndex]: false }));
+          }
+        }
+      } catch (error) {
+        console.warn('Error handling video playback:', error);
+        if (isMounted) {
+          setPlayingStates(prev => ({ ...prev, [currentImageIndex]: false }));
+        }
       }
-    }
-  }, [currentImageIndex, firstVideoUrl, player, post?.images]);
+    };
+
+    handlePlayback(player);
+
+    // Cleanup on unmount or when media changes
+    return () => {
+      isMounted = false;
+    };
+  }, [currentMediaUrl, player, isVideo, currentImageIndex]);
 
   // Initialize animation refs with proper types
   const fadeAnimation = useRef<Animated.Value>(new Animated.Value(0)).current;
@@ -1024,17 +1102,19 @@ export default function PostDetailScreen() {
     if (!item) return null;
     
     const isVideo = isVideoUrl(item);
+    const isActive = index === currentImageIndex;
     
     return (
-      <View style={styles.imageContainer}>
-        {isVideo && item === firstVideoUrl ? (
+      <View style={styles.imageContainer} key={`media-${index}`}>
+        {isVideo ? (
           <View style={styles.videoContainer}>
             <VideoView
-              style={styles.postImage}
+              style={styles.video}
               player={player}
-              allowsFullscreen={false}
-              allowsPictureInPicture={false}
+              allowsFullscreen={true}
+              allowsPictureInPicture={true}
               nativeControls={false}
+              contentFit="contain"
             />
             
             {/* Custom video controls overlay */}
@@ -1047,11 +1127,9 @@ export default function PostDetailScreen() {
                       const isPlaying = playingStates[index];
                       if (isPlaying) {
                         player.pause();
-                        console.log('⏸️ Video paused manually');
                         setPlayingStates(prev => ({ ...prev, [index]: false }));
                       } else {
                         player.play();
-                        console.log('▶️ Video played manually');
                         setPlayingStates(prev => ({ ...prev, [index]: true }));
                       }
                     }
@@ -1063,43 +1141,31 @@ export default function PostDetailScreen() {
                     color="white" 
                   />
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.closeControlsButton}
-                  onPress={() => {
-                    setShowControls(prev => ({
-                      ...prev,
-                      [index]: false
-                    }));
-                  }}
-                >
-                  <Ionicons name="close-circle" size={30} color="white" />
-                </TouchableOpacity>
               </View>
             )}
             
-            {/* Tap area to show controls */}
-            {!showControls[index] && (
-              <TouchableOpacity 
-                style={styles.videoTapArea}
-                activeOpacity={1}
-                onPress={() => {
-                  setShowControls(prev => ({
-                    ...prev,
-                    [index]: true
-                  }));
-                }}
-              />
-            )}
+            {/* Tap area to toggle controls */}
+            <TouchableOpacity 
+              style={styles.videoTapArea}
+              activeOpacity={1}
+              onPress={() => {
+                setShowControls(prev => ({
+                  ...prev,
+                  [index]: !prev[index]
+                }));
+              }}
+            />
           </View>
         ) : (
           <Image 
             source={{ uri: item }} 
             style={styles.postImage} 
-            resizeMode="cover"
+            resizeMode="contain"
+            onError={(e) => console.log('Error loading image:', e.nativeEvent.error)}
           />
         )}
         
+        {/* Media counter */}
         {postImages.length > 1 && (
           <View style={styles.imageCounter}>
             <BlurView intensity={15} tint="dark" style={styles.counterBlur}>
@@ -1111,7 +1177,7 @@ export default function PostDetailScreen() {
         )}
       </View>
     );
-  }, [postImages.length, currentImageIndex, showControls, playingStates]);
+  }, [postImages.length, currentImageIndex, showControls, playingStates, firstVideoUrl, player]);
 
 
   if (!safePostId) {
@@ -1437,36 +1503,53 @@ export default function PostDetailScreen() {
         </Animated.View>
 
         {/* Post Images */}
-        <Animated.View style={[styles.imagesSection, { opacity: fadeAnimation }]}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(event) => {
-              const offsetX = event.nativeEvent.contentOffset.x;
-              const newIndex = Math.round(offsetX / width);
-              setCurrentImageIndex(newIndex);
-            }}
-          >
-            {(postImages || []).map((item, index) => 
-              <View key={index}>{renderImageItem({ item, index })}</View>
-            )}
-          </ScrollView>
-          
-          {(postImages?.length || 0) > 1 && (
-            <View style={styles.dotsContainer}>
-              {(postImages || []).map((_: string, index: number) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.dot,
-                    { opacity: index === currentImageIndex ? 1 : 0.5 }
-                  ]}
-                />
-              ))}
+        <View style={styles.imagesSection}>
+          {postImages.length > 0 ? (
+            <FlatList
+              data={postImages}
+              renderItem={renderImageItem}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item: string, index: number) => `media-${index}`}
+              onMomentumScrollEnd={(event: any) => {
+                const contentOffset = event.nativeEvent.contentOffset;
+                const viewSize = event.nativeEvent.layoutMeasurement;
+                const index = Math.floor(contentOffset.x / viewSize.width);
+                setCurrentImageIndex(index);
+                setShowControls({ [index]: true });
+              }}
+              initialScrollIndex={currentImageIndex}
+              getItemLayout={(data: any, index: number) => ({
+                length: width,
+                offset: width * index,
+                index,
+              })}
+              removeClippedSubviews={false}
+            />
+          ) : (
+            <View style={styles.noMediaContainer}>
+              <Ionicons name="image-outline" size={48} color="#666" />
+              <Text style={styles.noMediaText}>No media available</Text>
             </View>
           )}
-        </Animated.View>
+        </View>
+
+        {/* Pagination Dots */}
+        {postImages.length > 1 && (
+          <View style={styles.dotsContainer}>
+            {postImages.map((_, idx) => (
+              <View 
+                key={`dot-${idx}`} 
+                style={[
+                  styles.dot, 
+                  idx === currentImageIndex && styles.activeDot
+                ]} 
+                pointerEvents="none"
+              />
+            ))}
+          </View>
+        )}
 
         {/* Post Actions */}
         <Animated.View style={[styles.actionsSection, { opacity: fadeAnimation }]}>
