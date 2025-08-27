@@ -12,14 +12,34 @@ export const postsApi = {
       .select(`
         *,
         user:user_profiles(*),
-        likes(user_id),
-        saves(user_id)
+        likes:likes!inner(
+          user_id,
+          user:user_profiles!inner(
+            id,
+            username,
+            avatar,
+            name
+          )
+        ),
+        saves(user_id),
+        comments(count)
       `)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data;
+    
+    // Transform the data to match the expected format
+    return data.map(post => ({
+      ...post,
+      likes: post.likes || [],
+      likes_count: post.likes?.length || 0,
+      saves: post.saves || [],
+      saves_count: post.saves?.length || 0,
+      comments_count: post.comments?.length || 0,
+      shares_count: post.shares_count || 0,
+      views_count: post.views_count || 0
+    }));
   },
 
   // Get posts by user
@@ -47,7 +67,15 @@ export const postsApi = {
       .select(`
         *,
         user:user_profiles(*),
-        likes(user_id),
+        likes:likes!inner(
+          user_id,
+          user:user_profiles!inner(
+            id,
+            username,
+            avatar,
+            name
+          )
+        ),
         saves(user_id),
         comments(
           *,
@@ -59,7 +87,19 @@ export const postsApi = {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Transform the data to match the expected format
+    return {
+      ...data,
+      likes: data.likes || [],
+      likes_count: data.likes?.length || 0,
+      saves: data.saves || [],
+      saves_count: data.saves?.length || 0,
+      comments: data.comments || [],
+      comments_count: data.comments?.length || 0,
+      shares_count: data.shares_count || 0,
+      views_count: data.views_count || 0
+    };
   },
 
   // Create new post
@@ -112,40 +152,125 @@ export const postsApi = {
     if (error) throw error;
   },
 
-  // Like/Unlike post
-  async toggleLike(postId: string) {
+  // Like post
+  async likePost(postId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Check if already liked
-    const { data: existingLike } = await supabase
+    // First check if the user has already liked the post
+    const { data: existingLike, error: checkError } = await supabase
       .from('likes')
       .select('id')
       .eq('user_id', user.id)
       .eq('post_id', postId)
       .single();
 
+    // If like already exists, return success without error
     if (existingLike) {
-      // Unlike
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('id', existingLike.id);
-
-      if (error) throw error;
-      return { liked: false };
-    } else {
-      // Like
-      const { error } = await supabase
-        .from('likes')
-        .insert({
-          user_id: user.id,
-          post_id: postId,
-        });
-
-      if (error) throw error;
-      return { liked: true };
+      return { success: true, alreadyLiked: true };
     }
+
+    // If there was an error checking (other than not found), throw it
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    // If we get here, the like doesn't exist, so create it
+    const { error } = await supabase
+      .from('likes')
+      .insert({
+        user_id: user.id,
+        post_id: postId,
+      });
+
+    if (error) throw error;
+    return { success: true, alreadyLiked: false };
+  },
+
+  // Unlike post
+  async unlikePost(postId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('post_id', postId);
+
+    if (error) throw error;
+    return { success: true };
+  },
+
+  // Check if current user has liked a post
+  async checkLikeStatus(postId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from('likes')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('post_id', postId)
+      .single();
+
+    return !!data;
+  },
+
+  // Save post
+  async savePost(postId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('saves')
+      .insert({
+        user_id: user.id,
+        post_id: postId,
+      });
+
+    if (error) throw error;
+    return { success: true };
+  },
+
+  // Unsave post
+  async unsavePost(postId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('saves')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('post_id', postId);
+
+    if (error) throw error;
+    return { success: true };
+  },
+
+  // Check if current user has saved a post
+  async checkSaveStatus(postId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from('saves')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('post_id', postId)
+      .single();
+
+    return !!data;
+  },
+
+  // Increment post view count
+  async incrementViewCount(postId: string) {
+    const { error } = await supabase.rpc('increment_views', {
+      post_id: postId
+    });
+
+    if (error) throw error;
+    return { success: true };
   },
 
   // Save/Unsave post

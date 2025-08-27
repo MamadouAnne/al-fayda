@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { PostInteractionProvider } from '@/contexts/PostInteractionContext';
 
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -17,7 +18,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <RootLayoutNav />
+        <PostInteractionProvider>
+          <RootLayoutNav />
+        </PostInteractionProvider>
       </ThemeProvider>
     </AuthProvider>
   )
@@ -59,21 +62,25 @@ function RootLayoutNav() {
   }, [user, loading, segments]);
 
   return (
-    <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="create-post" options={{ presentation: 'modal', headerShown: false }} />
-        <Stack.Screen name="create-story" options={{ presentation: 'modal', headerShown: false }} />
-        <Stack.Screen name="story-viewer" options={{ presentation: 'fullScreenModal', headerShown: false }} />
-        <Stack.Screen name="edit-profile" options={{ presentation: 'card', headerShown: false }} />
-        <Stack.Screen name="comments" options={{ presentation: 'card', headerTitle: 'Comments' }} />
-        <Stack.Screen name="messages" options={{ headerShown: false }} />
-        <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="notifications" options={{ presentation: 'card', headerTitle: 'Notifications' }} />
-        <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="user/[id]/follow-tabs" options={{ headerShown: false }} />
-        <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
+    <Stack screenOptions={{
+      headerShown: false,
+      animation: 'fade',
+      contentStyle: { backgroundColor: '#0f0f23' },
+    }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="create-post" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="create-story" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="story-viewer" options={{ presentation: 'fullScreenModal', headerShown: false }} />
+      <Stack.Screen name="edit-profile" options={{ presentation: 'card', headerShown: false }} />
+      <Stack.Screen name="comments" options={{ presentation: 'card', headerTitle: 'Comments' }} />
+      <Stack.Screen name="messages" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ presentation: 'card', headerTitle: 'Notifications' }} />
+      <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="user/[id]/follow-tabs" options={{ headerShown: false }} />
+      <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
     </Stack>
   )
 }

@@ -172,6 +172,8 @@ export default function EditProfileScreen() {
         }
         
         const getContentType = (extension: string) => {
+
+
           switch (extension.toLowerCase()) {
             case 'jpg':
             case 'jpeg':

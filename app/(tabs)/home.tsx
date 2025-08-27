@@ -9,6 +9,7 @@ import { BlurView } from 'expo-blur';
 import { postsApi, storiesApi, subscriptions } from '@/lib/api';
 import { getAvatarUrl, getPostImageUrls, getStoryMediaUrl } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import MarkazLogo from '@/components/MarkazLogo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -106,6 +107,7 @@ export default function HomeScreen() {
         
         const transformedPost = {
           id: post.id,
+          user_id: post.user.id,
           user: {
             id: post.user.id,
             name: post.user.name || 'User',
@@ -114,13 +116,20 @@ export default function HomeScreen() {
             verified: post.user.verified || false,
             location: post.location
           },
+          content: post.content || '',
           images,
-          caption: post.content ? post.content.slice(0, 500) : '', // Limit caption length
-          likes: post.likes?.length || 0,
-          timestamp: formatTimestamp(post.created_at),
+          likes_count: post.likes_count || 0,
+          comments_count: post.comments_count || 0,
+          saves_count: post.saves_count || 0,
+          shares_count: post.shares_count || 0,
+          views_count: post.views_count || 0,
           location: post.location,
-          tags: [], // Remove tags to reduce memory
-          comments: []
+          tags: post.tags || [],
+          created_at: post.created_at,
+          updated_at: post.updated_at || post.created_at,
+          likes: post.likes || [],
+          saves: post.saves || [],
+          comments: post.comments || []
         };
         
         // Log transformed post for debugging
@@ -322,6 +331,7 @@ export default function HomeScreen() {
             <View style={styles.futuristicHeader}>
               <BlurView intensity={20} style={styles.headerBlurContainer}>
                 <View style={styles.headerContent}>
+                  <MarkazLogo size="small" style={styles.headerLogo} />
                   <View style={styles.headerActions}>
                     <TouchableOpacity style={styles.searchButton}>
                       <BlurView intensity={30} style={styles.actionButtonBlur}>
@@ -528,7 +538,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23', // Match the gradient background color
+    backgroundColor: 'rgba(15, 15, 35, 0.8)', // Added transparency to the background color
   },
   backgroundContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -646,9 +656,12 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  headerLogo: {
+    flex: 1,
   },
   
   // Neo-Morphic Story Constellation
@@ -660,10 +673,10 @@ const styles = StyleSheet.create({
   },
   storyBarBackground: {
     position: 'absolute',
-    top: -10,
+    top: 0,
     left: 0,
     right: 0,
-    bottom: -10,
+    height: 100, // Fixed height instead of using top/bottom
     borderRadius: 25,
     overflow: 'hidden',
   },
@@ -692,11 +705,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   portalGradient: {
-    width: 90,
-    height: 110,
+    width: 80,
+    height: 90,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   portalUserAvatar: {
     marginBottom: 8,

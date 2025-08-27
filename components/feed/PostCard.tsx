@@ -1,10 +1,14 @@
-import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Animated, StyleSheet, PanResponder } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Animated, StyleSheet, PanResponder, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
+import { postsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePostInteractions } from '@/contexts/PostInteractionContext';
+import { isVideoUrl } from '@/lib/utils/media';
 
 const { width } = Dimensions.get('window');
 
@@ -25,32 +29,31 @@ const clearGlobalPlayingVideo = (postId: string) => {
   }
 };
 
-// Helper function to check if URL is a video
-const isVideoUrl = (url: string): boolean => {
-  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
-  const lowerUrl = url.toLowerCase();
-  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
-};
-
 interface Post {
-  id: number;
+  id: string;
+  user_id: string;
   user: {
-    id: number;
+    id: string;
     name: string;
     username: string;
     avatar: string | null;
     verified?: boolean;
     location?: string;
   };
+  content: string;
   images: string[];
-  caption: string;
-  likes: number;
-  shares?: number;
-  saves?: number;
-  timestamp: string;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  saves_count: number;
+  views_count: number;
   location?: string;
   tags?: string[];
   comments?: any[];
+  created_at: string;
+  updated_at: string;
+  likes?: Array<{ user_id: string }>;
+  saves?: Array<{ user_id: string }>;
 }
 
 interface PostCardProps {
@@ -60,15 +63,23 @@ interface PostCardProps {
 }
 
 function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
-  const [isLiked, setIsLiked] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [likesCount, setLikesCount] = useState(post.likes);
-  const [savesCount, setSavesCount] = useState(post.saves || 0);
-  const [viewsCount] = useState(Math.floor(Math.random() * 5000) + 100); // Mock views
-  const [commentsCount] = useState(post.comments?.length || 0);
+  const { profile } = useAuth();
+  const { 
+    likedPosts, 
+    savedPosts, 
+    postsLikesCount, 
+    toggleLike, 
+    toggleSave 
+  } = usePostInteractions();
+  
+  const isLiked = likedPosts[post.id] ?? false;
+  const isSaved = savedPosts[post.id] ?? false;
+  const likesCount = postsLikesCount[post.id] ?? post.likes_count ?? 0;
+  const savesCount = post.saves_count || 0;
+  const [commentsCount, setCommentsCount] = useState(Array.isArray(post.comments) ? post.comments.length : post.comments_count || 0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  
+  const [viewsCount, setViewsCount] = useState(post.views_count || 0);
   
   // Create video players for all videos in the post
   const videoUrls = useMemo(() => {
@@ -119,6 +130,22 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     }
   }, [isVisible, post.id]);
 
+  // Update views when post becomes visible
+  useEffect(() => {
+    if (isVisible && profile) {
+      const updateViewCount = async () => {
+        try {
+          await postsApi.incrementViewCount(post.id);
+          setViewsCount(prev => prev + 1);
+        } catch (error) {
+          console.error('Error updating view count:', error);
+        }
+      };
+      
+      updateViewCount();
+    }
+  }, [isVisible, post.id, profile?.id]);
+
   // Stop videos when screen loses focus (navigating away)
   useFocusEffect(
     useCallback(() => {
@@ -159,30 +186,73 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
     prevVisibleRef.current = isNowVisible;
   }, [isVisible, isVideoPlaying, mainPlayer, post.id]);
 
-  // Temporarily disable image switching effect to test video playback
-  // Effect to reset video playing state when switching images
-  // useEffect(() => {
-  //   if (isVideoPlaying) {
-  //     clearGlobalPlayingVideo(String(post.id));
-  //     setIsVideoPlaying(false);
-  //   }
-  // }, [currentImageIndex, isVideoPlaying, post.id]);
+  const handleLike = useCallback(async () => {
+    if (!profile) {
+      router.push('/sign-in');
+      return;
+    }
+    
+    try {
+      await toggleLike(post.id, isLiked);
+      
+      // Animation
+      Animated.sequence([
+        Animated.timing(likeAnimation, {
+          toValue: 1.3,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(likeAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  }, [isLiked, post.id, likeAnimation, profile, toggleLike]);
 
-  const handleLike = () => {
-    Animated.sequence([
-      Animated.timing(likeAnimation, { toValue: 1.3, duration: 100, useNativeDriver: true }),
-      Animated.timing(likeAnimation, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-    setIsLiked(!isLiked);
-    setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+  const handleSavePress = async () => {
+    if (!profile) {
+      router.push('/sign-in');
+      return;
+    }
+    
+    try {
+      await toggleSave(post.id, isSaved);
+    } catch (error) {
+      console.error('Error toggling save:', error);
+    }
   };
 
-  const handleSave = () => {
-    setIsSaved(!isSaved);
-    setSavesCount(prev => isSaved ? prev - 1 : prev + 1);
-  };
   const handleUserPress = () => router.push(`/(tabs)/profile?userId=${post.user.id}`);
-  const handlePostPress = () => router.push(`/post/${post.id}`);
+  const handleCommentPress = useCallback(() => {
+    // Navigate to comments screen
+    router.push({
+      pathname: '/post/[id]',
+      params: { 
+        id: post.id,
+        // Pass initial data to avoid loading flicker
+        initialData: JSON.stringify({
+          ...post,
+          likes_count: likesCount,
+          comments_count: commentsCount,
+          is_liked: isLiked,
+          is_saved: isSaved
+        })
+      }
+    });
+  }, [post.id, likesCount, commentsCount, isLiked, isSaved]);
+  
+  const handleSharePress = useCallback(() => {
+    if (!profile) {
+      router.push('/sign-in');
+      return;
+    }
+    // In a real app, you would implement sharing functionality here
+    Alert.alert('Share', 'Sharing functionality will be implemented here');
+  }, [profile, router]);
 
   const onScroll = (event: any) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 32));
@@ -323,7 +393,7 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
       } else {
         // Fallback to image with video icon
         return (
-          <TouchableOpacity key={`media-${imgIndex}`} onPress={handlePostPress}>
+          <TouchableOpacity key={`media-${imgIndex}`} onPress={handleCommentPress}>
             <Image
               source={{ uri: mediaUrl }}
               style={styles.postImage}
@@ -352,7 +422,28 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
         </View>
       );
     }
-  }, [currentImageIndex, shouldPlayVideoForCurrentImage, post.id, handlePostPress, togglePlayPause, isVideoPlaying, getPlayerForVideo]);
+  }, [currentImageIndex, shouldPlayVideoForCurrentImage, post.id, handleCommentPress, togglePlayPause, isVideoPlaying, getPlayerForVideo]);
+
+  // Format number to K, M, etc.
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'm';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'k';
+    }
+    return num.toString();
+  };
+  
+  // Simple like count display
+  const getLikersPreview = () => {
+    if (likesCount === 0) return '';
+    return `Liked by ${likesCount} ${likesCount === 1 ? 'person' : 'people'}`;
+  };
+
+  // Get shares count safely
+  const getSharesCount = (): number => {
+    return post.shares_count || 0;
+  };
 
   return (
     <View style={styles.container}>
@@ -429,52 +520,67 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
       <View style={styles.actionsRow}>
         <View style={styles.leftActions}>
           <Animated.View style={{ transform: [{ scale: likeAnimation }] }}>
-            <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
+            <TouchableOpacity onPress={handleLike} style={styles.actionButton} activeOpacity={0.7}>
               <LinearGradient
                 colors={isLiked ? ['#EF4444', '#DC2626'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-                style={styles.actionButtonGradient}
+                style={[styles.actionButtonGradient, isLiked && styles.likedButton]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={18} color="white" />
+                <Ionicons 
+                  name={isLiked ? "heart" : "heart-outline"} 
+                  size={18} 
+                  color={isLiked ? "#FF6B6B" : "white"} 
+                />
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
-          <TouchableOpacity onPress={handlePostPress} style={styles.actionButton}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-              style={styles.actionButtonGradient}
-            >
-              <Ionicons name="chatbubble-outline" size={18} color="white" />
-            </LinearGradient>
-          </TouchableOpacity>
+          
+          <View style={styles.actionWithCount}>
+            <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+                style={styles.actionButtonGradient}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <Text style={[styles.actionCount, commentsCount === 0 && { opacity: 0.6 }]}>
+              {formatNumber(commentsCount)}
+            </Text>
+          </View>
+          
           <TouchableOpacity style={styles.actionButton}>
             <LinearGradient
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
               style={styles.actionButtonGradient}
             >
-              <Ionicons name="paper-plane-outline" size={18} color="white" />
+              <Ionicons name="paper-plane-outline" size={20} color="white" />
             </LinearGradient>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+        
+        <TouchableOpacity onPress={handleSavePress} style={styles.saveButton}>
           <LinearGradient
             colors={isSaved ? ['#3B82F6', '#2563EB'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
             style={styles.saveButtonGradient}
           >
-            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={18} color="white" />
+            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={20} color="white" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
 
       {/* Stats */}
       <View style={styles.statsSection}>
+        {/* Stats row */}
         <View style={styles.statsIconRow}>
           <View style={styles.statItem}>
-            <Ionicons name="heart" size={16} color="#FF6B6B" />
-            <Text style={styles.statNumber}>{likesCount.toLocaleString()}</Text>
+            <Ionicons name="heart" size={16} color={isLiked ? "#FF6B6B" : "rgba(255,255,255,0.8)"} />
+            <Text style={[styles.statNumber, isLiked && { color: '#FF6B6B' }]}>{likesCount.toLocaleString()}</Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="chatbubble" size={16} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.statNumber}>{commentsCount}</Text>
+            <Text style={styles.statNumber}>{commentsCount.toLocaleString()}</Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="eye" size={16} color="rgba(255,255,255,0.8)" />
@@ -482,28 +588,32 @@ function PostCard({ post, index = 0, isVisible = true }: PostCardProps) {
           </View>
           <View style={styles.statItem}>
             <Ionicons name="paper-plane" size={16} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.statNumber}>{post.shares?.toLocaleString() || 0}</Text>
+            <Text style={styles.statNumber}>{getSharesCount().toLocaleString()}</Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="bookmark" size={16} color="rgba(255,255,255,0.8)" />
             <Text style={styles.statNumber}>{savesCount.toLocaleString()}</Text>
           </View>
         </View>
+        
+        {/* Likes count with text */}
+        {likesCount > 0 && (
+          <View style={styles.likesRow}>
+            <Ionicons name="heart" size={16} color="#FF6B6B" style={styles.likeIcon} />
+            <Text style={styles.likesCount}>
+              <Text style={styles.boldText}>{post.user.username || 'Someone'}</Text>
+              {likesCount > 1 ? ` and ${(likesCount - 1).toLocaleString()} others` : ''} liked this
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Caption */}
       <View style={styles.captionSection}>
-        <Text style={styles.captionText} numberOfLines={2}>
-          <Text style={styles.authorName} onPress={handleUserPress}>
-            {post.user.username}
-          </Text>
-          <Text> {post.caption}</Text>
+        <Text style={styles.caption} numberOfLines={2}>
+          <Text style={styles.username}>{post.user.username} </Text>
+          {post.content}
         </Text>
-        {post.comments && post.comments.length > 0 && (
-          <TouchableOpacity onPress={handlePostPress}>
-            <Text style={styles.viewCommentsText}>{`View all ${post.comments.length} comments`}</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
@@ -633,12 +743,31 @@ const styles = StyleSheet.create({
   actionButton: {
     marginRight: 15,
   },
+  actionWithCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 15,
+  },
   actionButtonGradient: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    padding: 10,
+    borderRadius: 50,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  likedButton: {
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  actionCount: {
+    color: 'white',
+    fontSize: 13,
+    marginLeft: 4,
+    fontWeight: '600',
   },
   saveButton: {
     width: 32,
@@ -655,45 +784,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
   },
+  likesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  likeIcon: {
+    marginRight: 6,
+  },
   statsIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    gap: 20,
+    paddingHorizontal: 4,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   statNumber: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '500',
   },
-  likesText: {
-    fontWeight: '600',
+  likesCount: {
     color: 'white',
     fontSize: 14,
+    fontWeight: '500',
   },
   captionSection: {
     paddingHorizontal: 15,
     paddingBottom: 15,
   },
-  captionText: {
+  caption: {
     color: 'white',
-    fontSize: 15,
-    lineHeight: 20,
-    marginTop: 8,
-  },
-  authorName: {
-    fontWeight: '600',
-    color: 'white',
-  },
-  viewCommentsText: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-    marginTop: 4,
+    lineHeight: 18,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  boldText: {
+    fontWeight: 'bold',
   },
   noImageContainer: {
     width: '100%',

@@ -9,14 +9,7 @@ import { postsApi, usersApi } from '@/lib/api';
 import { getPostImageUrls } from '@/lib/supabase';
 import PostCard from '@/components/feed/PostCard';
 import CompactPostCard from '@/components/feed/CompactPostCard';
-// Avatar URLs are stored directly in database - no utility function needed
-
-// Helper function to check if URL is a video
-const isVideoUrl = (url: string): boolean => {
-  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv'];
-  const lowerUrl = url.toLowerCase();
-  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('video_');
-};
+import { isVideoUrl } from '@/lib/utils/media';
 
 const { width } = Dimensions.get('window');
 

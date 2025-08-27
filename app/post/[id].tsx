@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard, FlatList } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StatusBar, Animated, StyleSheet, Dimensions, Image, TextInput, KeyboardAvoidingView, Platform, Keyboard, FlatList, Alert } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePostInteractions } from '@/contexts/PostInteractionContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -23,9 +25,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f0f23',
+    width: '100%',
+    margin: 0,
+    padding: 0,
   },
   content: {
     flex: 1,
+    width: '100%',
+    margin: 0,
+    padding: 0,
   },
   
   // Header
@@ -63,15 +71,19 @@ const styles = StyleSheet.create({
   
   // Images Section
   imagesSection: {
-    width: width,
-    height: width, // Square aspect ratio
-    backgroundColor: '#000',
+    position: 'relative',
+    width: '100%',
+    backgroundColor: 'transparent',
     marginBottom: 12,
+    padding: 0,
+    aspectRatio: 1,
+    overflow: 'hidden',
   },
   imageContainer: {
-    width: width,
+    width: '100%',
+    position: 'relative',
     aspectRatio: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -695,16 +707,29 @@ const styles = StyleSheet.create({
   
   // Video Styles
   videoContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     width: '100%',
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    margin: 0,
+    padding: 0,
   },
   video: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: '100%',
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
+    margin: 0,
+    padding: 0,
+    objectFit: 'cover',
   },
   videoTapArea: {
     position: 'absolute',
@@ -828,18 +853,30 @@ const styles = StyleSheet.create({
 
 export default function PostDetailScreen() {
   const router = useRouter();
+  const { profile: currentUser } = useAuth();
   // Get the post ID from URL params with type safety
   const params = useLocalSearchParams<{ id: string }>();
   const safePostId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   
   // Initialize state with proper types - ALL useState hooks must come first
-  const [isLiked, setIsLiked] = useState<boolean>(false);
-  const [isSaved, setIsSaved] = useState<boolean>(false);
-  const [likesCount, setLikesCount] = useState<number>(0);
-  const [savesCount, setSavesCount] = useState<number>(0);
-  const [viewsCount, setViewsCount] = useState<number>(0);
-  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [post, setPost] = useState<Post | null>(null);
+  const [savesCount, setSavesCount] = useState(0);
+  const [viewsCount, setViewsCount] = useState<number>(0);
+  const [isLikeLoading, setIsLikeLoading] = useState<boolean>(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+  
+  const { 
+    likedPosts, 
+    savedPosts, 
+    postsLikesCount, 
+    toggleLike, 
+    toggleSave,
+    updatePostLikes
+  } = usePostInteractions();
+  
+  const isLiked = post ? (likedPosts[post.id] ?? false) : false;
+  const isSaved = post ? (savedPosts[post.id] ?? false) : false;
+  const likesCount = post ? (postsLikesCount[post.id] ?? 0) : 0;
   const [loading, setLoading] = useState<boolean>(true);
   const [otherUserPosts, setOtherUserPosts] = useState<Post[]>([]);
   const [postImages, setPostImages] = useState<string[]>([]);
@@ -979,12 +1016,17 @@ export default function PostDetailScreen() {
       }
       
       setPost(postData);
-      setLikesCount(Array.isArray(postData.likes) ? postData.likes.length : 0);
       setSavesCount(postData.saves_count || 0);
       setViewsCount(postData.views_count || 0);
-      setIsLiked(false);
-      setIsSaved(false);
       
+      // Update the global likes state
+      if (postData.id) {
+        updatePostLikes(
+          postData.id, 
+          postData.is_liked || false, 
+          postData.likes_count || 0
+        );
+      }
       // Update derived state
       setPostImages(postData.images ?? []);
       setPostTags(postData.tags ?? []);
@@ -1222,27 +1264,48 @@ export default function PostDetailScreen() {
     );
   }
 
-  const handleLike = () => {
-    Animated.sequence([
-      Animated.timing(likeAnimation, {
-        toValue: 1.3,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(likeAnimation, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    setIsLiked(!isLiked);
-    setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
+  const handleLike = async () => {
+    if (!post?.id) return;
+    
+    try {
+      await toggleLike(post.id, isLiked);
+      
+      // Animation
+      Animated.sequence([
+        Animated.timing(likeAnimation, {
+          toValue: 1.3,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(likeAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } catch (error: any) {
+      console.error('Error toggling like:', error);
+      
+      if (error.code !== '23505') {
+        Alert.alert(
+          'Error',
+          'Failed to update like. Please try again.',
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+      }
+    }
   };
 
-  const handleSave = () => {
-    setIsSaved(!isSaved);
-    setSavesCount(isSaved ? savesCount - 1 : savesCount + 1);
+  const handleSave = async () => {
+    if (!post?.id) return;
+    
+    try {
+      await toggleSave(post.id, isSaved);
+      setSavesCount(isSaved ? savesCount - 1 : savesCount + 1);
+    } catch (error) {
+      console.error('Error toggling save:', error);
+    }
   };
 
   const handleUserPress = () => {
@@ -1563,7 +1626,7 @@ export default function PostDetailScreen() {
                   <Ionicons 
                     name={isLiked ? "heart" : "heart-outline"} 
                     size={18} 
-                    color="white" 
+                    color={isLiked ? "#FF6B6B" : "white"} 
                   />
                 </LinearGradient>
               </TouchableOpacity>
